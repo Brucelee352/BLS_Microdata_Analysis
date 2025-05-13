@@ -6,8 +6,6 @@ import os
 import sys
 import logging
 from pathlib import Path
-from datetime import datetime as dt
-from faker import Faker
 
 
 # MinIO/S3 Configuration
