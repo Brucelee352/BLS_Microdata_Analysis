@@ -1,0 +1,101 @@
+================================================================================
+CPS BASIC MONTHLY — RECOMMENDED VARIABLE EXTRACT
+Underemployment analysis: U-3, U-6, hours gap, occupational mismatch
+================================================================================
+
+Status key:  [keep] already had it   [fix] name correction   [add] new
+
+NOTE: Confirm every name against the CPS data dictionary for YOUR file's year.
+Basic-monthly names are stable, but the part-time-reason (PEHRRSN*) and
+desire-for-work (PEDW*) variables are the ones most prone to drift over time.
+
+
+--------------------------------------------------------------------------------
+1. INFRASTRUCTURE — non-negotiable
+--------------------------------------------------------------------------------
+PWCMPWGT     composite final weight        [add]  Without this, every figure is a
+                                                  raw sample count, not a
+                                                  population estimate. Top priority.
+                                                  Has 4 implied decimals (/10000).
+HRHHID       household ID                   [keep] Base household identifier
+HRHHID2      household ID continuation      [add]  Needed WITH HRHHID to identify a
+                                                  household over time
+PULINENO     person line number            [add]  Identifies person within
+                                                  household for month-to-month links
+
+
+--------------------------------------------------------------------------------
+2. LABOR FORCE STATUS — drives U-3
+--------------------------------------------------------------------------------
+PEMLR        employment status (LF recode) [keep]
+PUWK         worked last week              [keep]
+PRUNTYPE     reason for unemployment       [keep]
+PRUNEDUR     unemployment duration         [keep]
+PULAY        layoff status                 [keep]
+PULAY6M      expected recall               [keep]
+PRWKSTAT     full/part-time work status    [keep]
+
+
+--------------------------------------------------------------------------------
+3. HOURS & INVOLUNTARY PART-TIME — time-related underemployment
+--------------------------------------------------------------------------------
+PEHRUSLT     usual weekly hours            [keep] Gives the level
+PEHRACTT     actual hours last week        [add]  Actual-vs-usual = the hours GAP
+                                                  (intensity, not just a headcount)
+PEHRWANT     wants to work more            [keep]
+PEHRRSN      reason for part-time          [keep] (verify exact name)
+PEMJOT       multiple jobs                 [keep]
+
+
+--------------------------------------------------------------------------------
+4. MARGINAL ATTACHMENT — the piece that makes U-6 possible
+--------------------------------------------------------------------------------
+PEDWWNTO     wants a job (NILF)            [add]
+PEDWAVL      available to work             [add]
+PEDWLKWK     looked in last 12 months     [add]
+PEDWRSN      reason not looking           [add]  Flags discouragement specifically
+
+   >>> Without this block you can compute U-3 but NOT U-6. <<<
+
+
+--------------------------------------------------------------------------------
+5. OCCUPATION & INDUSTRY — the mismatch angle
+--------------------------------------------------------------------------------
+PEIO1OCD     occupation code              [add]  Education x occupation IS the
+                                                 overqualification measure
+PEIO1ICD     industry code               [add]  Industry cuts; mismatch by sector
+
+   >>> Without occupation you're locked into the hours-based definition only. <<<
+
+
+--------------------------------------------------------------------------------
+6. DEMOGRAPHICS — strong block, two corrections
+--------------------------------------------------------------------------------
+PRTAGE       age                          [fix]  was PEAGE; PRTAGE is the populated,
+                                                 topcoded recode
+PTDTRACE     race                         [fix]  was PTRACE; no such variable
+PESEX        sex                          [keep]
+PEMARITL     marital status              [keep]
+PEEDUCA      highest education            [keep]
+PEHSPNON     Hispanic origin              [keep]
+PRCITSHP     citizenship                  [keep]
+PENATVTY     birth country                [keep]
+PRFAMNUM     family IDENTIFIER            [keep] NOTE: a within-household family id,
+                                                 NOT a count of members. For
+                                                 household size use HRNUMHOU.
+
+
+--------------------------------------------------------------------------------
+7. GEOGRAPHY — currently absent
+--------------------------------------------------------------------------------
+GESTFIPS     state (FIPS)                 [add]  Needed for any geographic cut
+GTCBSA       metro area (CBSA)            [add]  Optional
+
+
+================================================================================
+FLAT LIST (copy/paste for an extract request)
+================================================================================
+PWCMPWGT HRHHID HRHHID2 PULINENO PEMLR PUWK PRUNTYPE PRUNEDUR PULAY PULAY6M
+PRWKSTAT PEHRUSLT PEHRACTT PEHRWANT PEHRRSN PEMJOT PEDWWNTO PEDWAVL PEDWLKWK
+PEDWRSN PEIO1OCD PEIO1ICD PRTAGE PTDTRACE PESEX PEMARITL PEEDUCA PEHSPNON
+PRCITSHP PENATVTY PRFAMNUM GESTFIPS GTCBSA HRNUMHOU
