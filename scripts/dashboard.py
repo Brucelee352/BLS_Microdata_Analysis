@@ -1,4 +1,5 @@
-﻿"""U.S. Underemployment Dashboard.
+# -*- coding: utf-8 -*-
+"""U.S. Underemployment Dashboard.
 
 A self-contained Plotly Dash app that visualizes state-level underemployment
 measures derived from BLS CPS Basic Monthly Microdata (Jan-Apr 2026).
@@ -166,7 +167,7 @@ def fmt_delta(value: float, national: float, lower_is_better: bool = True) -> tu
     (shown green); a higher value is unfavorable (red).
     """
     delta = value - national
-    arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "▬")
+    arrow = "+" if delta > 0 else ("-" if delta < 0 else "~")
     favorable = (delta < 0) if lower_is_better else (delta > 0)
     if delta == 0:
         color = "#6c757d"
@@ -443,8 +444,8 @@ title_block = dbc.Card(
         [
             html.H2("U.S. Underemployment Dashboard", className="fw-bold"),
             html.P(
-                f"CPS Basic Monthly Microdata · Jan–Apr 2026 "
-                f"· Not Seasonally Adjusted",
+                "CPS Basic Monthly Microdata | Jan-Apr 2026 "
+                "| Not Seasonally Adjusted",
                 className="text-muted mb-2",
             ),
             html.P(
