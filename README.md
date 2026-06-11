@@ -2,6 +2,8 @@
 
 An interactive state-level underemployment dashboard built from Bureau of Labor Statistics (BLS) Current Population Survey (CPS) Basic Monthly public-use microdata. The dashboard surfaces four labor underutilization measures — U-3, U-6, the involuntary hours gap, and occupational mismatch, for every U.S. state, pooled across January through May 2026.
 
+---
+
 ## Key Findings (Pooled Jan–May 2026, Not Seasonally Adjusted)
 
 | Measure | National |
@@ -29,7 +31,9 @@ These CPS microdata estimates were cross-validated against the Bureau of Labor S
 
 This gap is a known, disclosed methodology boundary: the marginal-attachment filter used here (`PEDWWNTO=1`, `PEDWAVL=1`, `PEDWLKWK ∈ {1,2}`) captures a narrower population than BLS's full U-6 numerator, which incorporates additional classification logic in the published estimates. 
 
-The measure ladder from the BLS data (Jan-May NSA avg) shows: U-6 = U-3 (4.36%) + discouraged workers (+0.26pp) + other marginally attached (+0.70pp) + involuntary part-time (+2.78pp) = 8.10%. The 0.66pp gap falls primarily in the marginally-attached component. This does not affect U-3 or the overqualification rate.
+The measure ladder from the BLS data (Jan-May NSA avg) shows: U-6 = U-3 (4.36%) + discouraged workers (+0.26pp) + other marginally attached (+0.70pp) + involuntary part-time (+2.78pp) = 8.10%. 
+
+The 0.66pp gap falls primarily in the marginally-attached component. This does not affect U-3 or the overqualification rate.
 
 ## Measures Defined
 
@@ -50,7 +54,11 @@ The measure ladder from the BLS data (Jan-May NSA avg) shows: U-6 = U-3 (4.36%) 
 
 This is a relative, data-driven heuristic, no external "required education" table or O\*NET crosswalk is needed, and no subjective threshold is imposed. 
 
-The result reflects statistical deviation from occupation norms as observed in the data itself. Because PEEDUCA is an ordinal code rather than continuous years of schooling, the measure should be read as a rank-based signal, not a precise credential gap. The overqualification rate is not cross-validated against BLS published figures (BLS does not publish a comparable national estimate).
+The result reflects statistical deviation from occupation norms as observed in the data itself. 
+
+Because PEEDUCA is an ordinal code rather than continuous years of schooling, the measure should be read as a rank-based signal, not a precise credential gap. 
+
+*The overqualification rate is not cross-validated against BLS published figures, (BLS does not publish a comparable national estimate) and is a properitary calculation.*
 
 ## Data Source
 
@@ -58,7 +66,11 @@ Bureau of Labor Statistics, Current Population Survey (CPS) Basic Monthly Public
 Files: `jan26pub.csv`, `feb26pub.csv`, `mar26pub.csv`, `apr26pub.csv`, `may26pub.csv`
 Composite final weight: `PWCMPWGT` (4 implied decimals — divide by 10,000)
 
-Figures are **not seasonally adjusted** and are **pooled across five months**. Pooling stabilizes small state-level cells but blends seasonal factors, do not read trend or make seasonal claims from these figures.
+Figures are **not seasonally adjusted** and are **pooled across five months**. 
+
+Pooling stabilizes small state-level cells but blends seasonal factors, do not read trend or make seasonal claims from these figures.
+
+--- 
 
 ## Project Structure
 
@@ -104,7 +116,7 @@ Raw CPS microdata files are available from the BLS CPS Basic Monthly Data page. 
 ## Dashboard Features
 
 - Choropleth map with metric toggle (U-3 / U-6 / Overqualification)
-- KPI cards showing selected state vs. national benchmark
+- KPI cards showing selected state vs. national benchmarks:
     - Bar chart of all four measures for the selected state
     - Bullet gauge displaying hours-gap intensity
     - Scatter plot of U-3 vs. U-6 across all states
@@ -126,4 +138,4 @@ Click any state on the map to drill into that state's measures. Use the state dr
 
 ## License
 
-Built on BLS public-use microdata, which carries no redistribution restrictions. See the [BLS Data Policy](https://www.bls.gov/bls/linksite.htm) for terms.
+Built on BLS public-use microdata, which carries no redistribution restrictions. See the [BLS Data Policy](https://www.bls.gov/bls/linksite.htm) for terms. Repo is not bound to licensure for reproduction purposes and is closed-source. 
