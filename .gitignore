@@ -162,3 +162,7 @@ cython_debug/
 # Data
 .csv/
 /data
+.duckdb/
+
+# Claude
+.claude/

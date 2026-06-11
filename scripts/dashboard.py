@@ -1,4 +1,4 @@
-"""U.S. Underemployment Dashboard.
+﻿"""U.S. Underemployment Dashboard.
 
 A self-contained Plotly Dash app that visualizes state-level underemployment
 measures derived from BLS CPS Basic Monthly Microdata (Jan-Apr 2026).
@@ -6,8 +6,8 @@ measures derived from BLS CPS Basic Monthly Microdata (Jan-Apr 2026).
 Data is loaded once at startup from the project's DuckDB database into a pandas
 DataFrame; all callbacks operate on that in-memory frame.
 
-Run:
-    python dashboard.py
+Run (from the worktree root):
+    uv run python scripts/dashboard.py
 Then open http://localhost:8050
 """
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import dash
+import dash 
 import dash_bootstrap_components as dbc
 import duckdb
 import pandas as pd
@@ -222,7 +222,7 @@ def build_choropleth(metric_key: str, selected_fips: int) -> go.Figure:
         geo=dict(scope="usa", lakecolor="white", bgcolor="rgba(0,0,0,0)"),
         margin=dict(l=0, r=0, t=10, b=0),
         height=420,
-        paper_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(240,246,255,0.4)",
     )
     return fig
 
@@ -275,10 +275,10 @@ def build_bar(row: pd.Series) -> go.Figure:
     fig.update_layout(
         barmode="group",
         title=dict(text=f"Measures: {state_label} vs National", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=50, b=10),
+        margin=dict(l=10, r=10, t=80, b=10),
         height=340,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.14, xanchor="center", x=0.5),
+        paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         yaxis=dict(title="value (% or hrs)", gridcolor="#e9ecef"),
     )
@@ -306,7 +306,7 @@ def build_gauge(row: pd.Series) -> go.Figure:
             ),
             gauge=dict(
                 shape="bullet",
-                axis=dict(range=[0, axis_max]),
+                axis=dict(range=[0, axis_max], ticksuffix="%"),
                 bar=dict(color="#2c7fb8"),
                 steps=[
                     dict(range=[0, nat_u6], color="#d4edda"),
@@ -323,9 +323,16 @@ def build_gauge(row: pd.Series) -> go.Figure:
         )
     )
     fig.update_layout(
-        margin=dict(l=20, r=30, t=70, b=20),
+        margin=dict(l=20, r=30, t=90, b=50),
         height=340,
-        paper_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(240,246,255,0.4)",
+        annotations=[dict(
+            x=0.5, y=-0.18,
+            xref="paper", yref="paper",
+            text="U-6 Broad Underutilization Rate (%)",
+            showarrow=False,
+            font=dict(size=12, color="#555555"),
+        )],
     )
     return fig
 
@@ -373,10 +380,10 @@ def build_scatter(selected_fips: int) -> go.Figure:
 
     fig.update_layout(
         title=dict(text="States: U-3 vs Overqualification Rate", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=50, b=10),
+        margin=dict(l=10, r=10, t=70, b=10),
         height=340,
         showlegend=False,
-        paper_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(title="U-3 (%)", gridcolor="#e9ecef"),
         yaxis=dict(title="Overqualification Rate (%)", gridcolor="#e9ecef"),
@@ -395,7 +402,7 @@ def build_kpi_cards(row: pd.Series) -> list:
             html.Div(delta_text, style={"color": delta_color, "fontSize": "0.85rem"}),
         ]
         return dbc.Col(
-            dbc.Card(dbc.CardBody(body), className="shadow-sm h-100"),
+            dbc.Card(dbc.CardBody(body), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
             xs=12, sm=6, md=3,
         )
 
@@ -455,6 +462,7 @@ title_block = dbc.Card(
         ]
     ),
     className="shadow-sm h-100",
+    style={"background": "linear-gradient(135deg, #ffffff 0%, #fff0f0 100%)"},
 )
 
 map_block = dbc.Card(
@@ -481,6 +489,7 @@ map_block = dbc.Card(
         ]
     ),
     className="shadow-sm h-100",
+    style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"},
 )
 
 app.layout = dbc.Container(
@@ -522,6 +531,7 @@ app.layout = dbc.Container(
     ],
     fluid=True,
     className="py-3",
+    style={"background": "linear-gradient(135deg, #f0f4ff 0%, #fff5f5 100%)"},
 )
 
 
@@ -571,4 +581,4 @@ def update_panels(selected_fips):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8050, debug=False)
+    app.run(host="127.0.0.1", port=8050, debug=True)

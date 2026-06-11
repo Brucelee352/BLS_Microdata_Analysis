@@ -1,9 +1,9 @@
-"""
+﻿"""
 #----------------------------------------------------------------#
 
 BLS CPS Underemployment ETL Pipeline v1.0
 
-Pools the Jan-Apr 2026 CPS Basic Monthly public-use microdata files,
+Pools the Jan-May 2026 CPS Basic Monthly public-use microdata files,
 cleans and renames them to analyst-friendly snake_case, computes the
 official and alternative labor-underutilization measures (U-3, U-6,
 involuntary part-time hours gap, occupational mismatch) per state and
@@ -92,6 +92,7 @@ MONTHLY_FILES = {
     "feb26pub.csv": "2026-02",
     "mar26pub.csv": "2026-03",
     "apr26pub.csv": "2026-04",
+    "may26pub.csv": "2026-05",
 }
 
 # Uppercase BLS names to keep. Corrections from the data_parser output are
