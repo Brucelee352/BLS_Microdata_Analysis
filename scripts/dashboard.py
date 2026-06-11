@@ -277,7 +277,7 @@ def build_bar(row: pd.Series) -> go.Figure:
         barmode="group",
         title=dict(text=f"Measures: {state_label} vs National", x=0.5, font=dict(size=14)),
         margin=dict(l=10, r=10, t=80, b=10),
-        height=340,
+        height=380,
         legend=dict(orientation="h", yanchor="bottom", y=1.14, xanchor="center", x=0.5),
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -325,7 +325,7 @@ def build_gauge(row: pd.Series) -> go.Figure:
     )
     fig.update_layout(
         margin=dict(l=20, r=30, t=90, b=50),
-        height=340,
+        height=380,
         paper_bgcolor="rgba(240,246,255,0.4)",
         annotations=[dict(
             x=0.5, y=-0.18,
@@ -382,12 +382,62 @@ def build_scatter(selected_fips: int) -> go.Figure:
     fig.update_layout(
         title=dict(text="States: U-3 vs Overqualification Rate", x=0.5, font=dict(size=14)),
         margin=dict(l=10, r=10, t=70, b=10),
-        height=340,
+        height=460,
         showlegend=False,
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(title="U-3 (%)", gridcolor="#e9ecef"),
         yaxis=dict(title="Overqualification Rate (%)", gridcolor="#e9ecef"),
+    )
+    return fig
+
+
+def build_rankings(selected_fips: int, metric_key: str) -> go.Figure:
+    """Horizontal bar chart of all states ranked by the selected map metric.
+
+    The selected state is highlighted in orange; the national average is drawn
+    as a vertical dashed reference line. States are sorted ascending so the
+    lowest value sits at the top.
+    """
+    col, axis_label, _ = MAP_METRICS[metric_key]
+    sel = int(selected_fips)
+
+    states = STATES.copy().sort_values(col, ascending=True)
+    nat_val = float(NATIONAL[col])
+
+    colors = [
+        "#e6550d" if int(f) == sel else "#2c7fb8"
+        for f in states["state_fips"]
+    ]
+
+    fig = go.Figure(
+        go.Bar(
+            x=states[col],
+            y=states["state_name"],
+            orientation="h",
+            marker_color=colors,
+            customdata=states["state_name"],
+            hovertemplate="<b>%{customdata}</b><br>" + axis_label + ": %{x:.2f}%<extra></extra>",
+        )
+    )
+
+    fig.add_vline(
+        x=nat_val,
+        line_dash="dash",
+        line_color="#0d1b2a",
+        annotation_text=f"National {nat_val:.2f}%",
+        annotation_position="top",
+    )
+
+    fig.update_layout(
+        title=dict(text=f"State Rankings: {axis_label}", x=0.5, font=dict(size=14)),
+        margin=dict(l=10, r=10, t=70, b=10),
+        height=520,
+        showlegend=False,
+        paper_bgcolor="rgba(240,246,255,0.4)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(title=axis_label, gridcolor="#e9ecef"),
+        yaxis=dict(title="", tickfont=dict(size=9)),
     )
     return fig
 
@@ -399,11 +449,11 @@ def build_kpi_cards(row: pd.Series) -> list:
     def card(title: str, value_text: str, delta_text: str, delta_color: str) -> dbc.Col:
         body = [
             html.Div(title, className="text-muted small text-uppercase"),
-            html.H3(value_text, className="my-1 fw-bold"),
-            html.Div(delta_text, style={"color": delta_color, "fontSize": "0.85rem"}),
+            html.H3(value_text, className="my-2 fw-bold", style={"fontSize": "1.6rem"}),
+            html.Div(delta_text, style={"color": delta_color, "fontSize": "0.9rem", "marginTop": "4px"}),
         ]
         return dbc.Col(
-            dbc.Card(dbc.CardBody(body), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
+            dbc.Card(dbc.CardBody(body, className="py-3 px-3"), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
             xs=12, sm=6, md=3,
         )
 
@@ -442,25 +492,27 @@ server = app.server  # for WSGI deployment
 title_block = dbc.Card(
     dbc.CardBody(
         [
-            html.H2("U.S. Underemployment Dashboard", className="fw-bold"),
+            html.H2("U.S. Underemployment Dashboard", className="fw-bold mb-3"),
             html.P(
                 "CPS Basic Monthly Microdata | Jan-Apr 2026 "
                 "| Not Seasonally Adjusted",
                 className="text-muted mb-2",
+                style={"fontSize": "0.95rem"},
             ),
             html.P(
                 "Select a state on the map or dropdown to explore measures.",
-                className="small text-secondary",
+                className="small text-secondary mb-2",
             ),
             html.Hr(),
-            html.Label("Select state", className="fw-semibold small"),
+            html.Label("Select a State", className="mt-3 fw-semibold small"),
             dcc.Dropdown(
                 id="state-dropdown",
                 options=DROPDOWN_OPTIONS,
                 value=NATIONAL_FIPS,
                 clearable=False,
             ),
-        ]
+        ],
+        className="p-4",
     ),
     className="shadow-sm h-100",
     style={"background": "linear-gradient(135deg, #ffffff 0%, #fff0f0 100%)"},
@@ -505,33 +557,38 @@ app.layout = dbc.Container(
         dbc.Row(id="kpi-cards", className="g-3 mb-3"),
         dbc.Row(
             [
-                dbc.Col(dcc.Graph(id="bar-chart", config={"displayModeBar": False}), md=4),
-                dbc.Col(dcc.Graph(id="gauge-chart", config={"displayModeBar": False}), md=4),
-                dbc.Col(dcc.Graph(id="scatter-chart", config={"displayModeBar": False}), md=4),
+                dbc.Col(dcc.Graph(id="bar-chart", config={"displayModeBar": False}), md=6),
+                dbc.Col(dcc.Graph(id="gauge-chart", config={"displayModeBar": False}), md=6),
             ],
-            className="g-3",
+            className="g-3 mb-3",
+        ),
+        dbc.Row(
+            [
+                dbc.Col(dcc.Graph(id="scatter-chart", config={"displayModeBar": False}), md=6),
+                dbc.Col(dcc.Graph(id="rankings-chart", config={"displayModeBar": False}), md=6),
+            ],
+            className="g-3 mb-3",
         ),
         dbc.Row(
             dbc.Col(
-                html.P(
-                    "Point-in-time estimate, not seasonally adjusted. "
-                    "Small state figures may have high sampling error.",
-                    className="small text-muted fst-italic mt-2",
-                )
-            )
-        ),
-        dbc.Row(
-            dbc.Col(
-                html.P(
-                    f"Source: BLS CPS Basic Monthly Microdata, {MONTH_RANGE}. "
-                    "Overqualification rate suppressed when employed sample < 100,000.",
-                    className="small text-secondary",
-                )
-            )
+                [
+                    html.P(
+                        "Point-in-time estimate, not seasonally adjusted. "
+                        "Small state figures may have high sampling error.",
+                        className="small text-muted mb-1",
+                    ),
+                    html.P(
+                        f"Source: BLS CPS Basic Monthly Microdata, {MONTH_RANGE}. "
+                        "Overqualification rate suppressed when employed sample < 100,000.",
+                        className="small text-muted mb-1",
+                    ),
+                ]
+            ),
+            className="mt-3 pt-3 border-top",
         ),
     ],
     fluid=True,
-    className="py-3",
+    className="py-4 px-2",
     style={"background": "linear-gradient(135deg, #f0f4ff 0%, #fff5f5 100%)"},
 )
 
@@ -573,12 +630,14 @@ def update_map(metric_key, selected_fips):
     Output("bar-chart", "figure"),
     Output("gauge-chart", "figure"),
     Output("scatter-chart", "figure"),
+    Output("rankings-chart", "figure"),
     Input("state-dropdown", "value"),
+    Input("map-metric", "value"),
 )
-def update_panels(selected_fips):
+def update_panels(selected_fips, metric_key):
     row = get_row(selected_fips)
     cards = build_kpi_cards(row)
-    return cards, build_bar(row), build_gauge(row), build_scatter(selected_fips)
+    return cards, build_bar(row), build_gauge(row), build_scatter(selected_fips), build_rankings(selected_fips, metric_key)
 
 
 if __name__ == "__main__":
