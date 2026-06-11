@@ -276,9 +276,9 @@ def build_bar(row: pd.Series) -> go.Figure:
     fig.update_layout(
         barmode="group",
         title=dict(text=f"Measures: {state_label} vs National", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=80, b=10),
+        margin=dict(l=10, r=10, t=60, b=60),
         height=380,
-        legend=dict(orientation="h", yanchor="bottom", y=1.14, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5),
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         yaxis=dict(title="value (% or hrs)", gridcolor="#e9ecef"),
