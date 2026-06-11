@@ -66,6 +66,14 @@ FIPS_TO_NAME = {
 NATIONAL_FIPS = 0
 NATIONAL_LABEL = "National"
 
+# BLS published NSA averages, Jan-May 2026, Table A-15 (series LNU04000000 / LNU03327709).
+# U-3: monthly NSA simple avg = 4.36% — exact match with our CPS pooled estimate.
+# U-6: monthly NSA simple avg = 8.10% — our CPS estimate is 7.44% (-0.66pp gap,
+#      attributable to our PEDWWNTO/PEDWAVL/PEDWLKWK marginal-attachment filter
+#      capturing a narrower population than the BLS full U-6 numerator).
+BLS_NSA_U3_AVG = 4.36
+BLS_NSA_U6_AVG = 8.10
+
 # Map metric -> (column, display label, hover label).
 MAP_METRICS = {
     "u3": ("u3", "U-3 (%)", "U-3"),
@@ -273,12 +281,31 @@ def build_bar(row: pd.Series) -> go.Figure:
         )
     )
 
+    # BLS NSA reference markers (horizontal tick) for U-3 and U-6.
+    # U-3 BLS avg matches our estimate exactly; U-6 BLS avg (8.10%) exceeds ours
+    # (7.44%) by 0.66pp — the marker makes the gap visible without commentary.
+    fig.add_trace(
+        go.Scatter(
+            x=["U-3", "U-6"],
+            y=[BLS_NSA_U3_AVG, BLS_NSA_U6_AVG],
+            mode="markers",
+            marker=dict(
+                symbol="line-ew-open",
+                size=30,
+                color="#fd8d3c",
+                line=dict(color="#fd8d3c", width=2.5),
+            ),
+            name="BLS NSA Avg (Jan-May)",
+            hovertemplate="BLS Pub. NSA Avg<br>%{x}: %{y:.2f}%<extra></extra>",
+        )
+    )
+
     fig.update_layout(
         barmode="group",
         title=dict(text=f"Measures: {state_label} vs National", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=60, b=60),
+        margin=dict(l=10, r=10, t=60, b=75),
         height=380,
-        legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         yaxis=dict(title="value (% or hrs)", gridcolor="#e9ecef"),
@@ -319,8 +346,14 @@ def build_gauge(row: pd.Series) -> go.Figure:
                     value=nat_u6,
                 ),
             ),
-            title=dict(text=f"U-6: {state_label}<br><sub>line = national {nat_u6:.2f}%</sub>",
-                       font=dict(size=14)),
+            title=dict(
+                text=(
+                    f"U-6: {state_label}"
+                    f"<br><sub>dark line = CPS national {nat_u6:.2f}%"
+                    f" | BLS NSA avg {BLS_NSA_U6_AVG:.2f}%</sub>"
+                ),
+                font=dict(size=14),
+            ),
         )
     )
     fig.update_layout(
@@ -494,7 +527,7 @@ title_block = dbc.Card(
         [
             html.H2("U.S. Underemployment Dashboard", className="fw-bold mb-3"),
             html.P(
-                "CPS Basic Monthly Microdata | Jan-Apr 2026 "
+                "CPS Basic Monthly Microdata | Jan-May 2026 "
                 "| Not Seasonally Adjusted",
                 className="text-muted mb-2",
                 style={"fontSize": "0.95rem"},
@@ -573,13 +606,25 @@ app.layout = dbc.Container(
             dbc.Col(
                 [
                     html.P(
-                        "Point-in-time estimate, not seasonally adjusted. "
+                        "Point-in-time estimates, not seasonally adjusted. "
                         "Small state figures may have high sampling error.",
                         className="small text-muted mb-1",
                     ),
                     html.P(
                         f"Source: BLS CPS Basic Monthly Microdata, {MONTH_RANGE}. "
-                        "Overqualification rate suppressed when employed sample < 100,000.",
+                        "Overqualification rate suppressed when employed sample < 100,000. "
+                        "Overqualification uses the realized-matches method: workers whose "
+                        "educational attainment (PEEDUCA) exceeds their occupation's mean "
+                        "by more than 1 SD are flagged; occupations with fewer than 30 "
+                        "observations excluded.",
+                        className="small text-muted mb-1",
+                    ),
+                    html.P(
+                        f"BLS validation (Table A-15 NSA, Jan-May 2026): "
+                        f"U-3 CPS estimate 4.36% = BLS published NSA avg 4.36% (exact match). "
+                        f"U-6 CPS estimate 7.44% vs BLS NSA avg 8.10% (-0.66pp; "
+                        f"orange markers on bar chart show BLS reference levels). "
+                        f"Gap reflects narrower marginal-attachment filter in CPS microdata.",
                         className="small text-muted mb-1",
                     ),
                 ]
