@@ -268,7 +268,7 @@ def build_bar(row: pd.Series) -> go.Figure:
             y=nat_vals,
             marker_color="#9ecae1" if not is_national else "#2c7fb8",
             text=[f"{v:.1f}" for v in nat_vals],
-            textposition="outside",
+            textposition="inside",
         )
     )
 
@@ -512,17 +512,21 @@ server = app.server
 title_block = dbc.Card(
     dbc.CardBody(
         [
-            html.H2("U.S. Underemployment Dashboard", className="fw-bold mb-3"),
+            html.H2("U.S. Underemployment Report", className="fw-bold mb-3"),
             html.P(
-                "CPS Basic Monthly Microdata | Jan-May 2026 | Not Seasonally Adjusted",
-                className="text-muted mb-2",
-                style={"fontSize": "0.95rem"},
-            ),
-            html.P(
-                "Select a state on the map or dropdown to explore measures.",
+                "Author: Bruce A. Lee",
                 className="small text-secondary mb-2",
             ),
+            html.P(
+                "Dataset: CPS Basic Monthly Microdata | Jan-May 2026",
+                className="text-muted mb-2",
+                style={"fontSize": "0.90rem"},
+            ),
             html.Hr(),
+            html.P(
+                "Select a state on the map or dropdown to explore measures.",
+                className="small text",
+            ),
             html.Label("Select a State", className="mt-3 fw-semibold small"),
             dcc.Dropdown(
                 id="state-dropdown",
@@ -592,15 +596,16 @@ app.layout = dbc.Container(
             dbc.Col(
                 [
                     html.P(
-                        "Point-in-time estimates, not seasonally adjusted. "
                         "Small state figures may have high sampling error.",
                         className="small text-muted mb-1",
                     ),
                     html.P(
-                        f"Source: BLS CPS Basic Monthly Microdata, {MONTH_RANGE}. "
-                        "Overqualification rate suppressed when employed sample < 100,000. "
-                        "Overqualification uses the realized-matches method: workers whose "
-                        "education (PEEDUCA) exceeds their occupation mean by >1 SD are flagged; "
+                        "Overqualification rate suppressed when employed sample < 100,000. ",
+                        className="small text-muted mb-1",
+                    ),
+                    html.P(
+                         "Overqualification uses the realized-matches method: workers whose "
+                        "education (PEEDUCA) exceeds their occupation mean by >1 SD are flagged;"
                         "occupations with <30 observations excluded.",
                         className="small text-muted mb-1",
                     ),

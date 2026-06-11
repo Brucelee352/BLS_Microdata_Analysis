@@ -1,6 +1,6 @@
-# BLS Microdata Analysis — Underemployment Dashboard
+# BLS Microdata Analysis 
 
-An interactive state-level underemployment dashboard built from Bureau of Labor Statistics (BLS) Current Population Survey (CPS) Basic Monthly public-use microdata. The dashboard surfaces four labor underutilization measures — U-3, U-6, the involuntary hours gap, and occupational mismatch — for every U.S. state, pooled across January through April 2026.
+An interactive state-level underemployment dashboard built from Bureau of Labor Statistics (BLS) Current Population Survey (CPS) Basic Monthly public-use microdata. The dashboard surfaces four labor underutilization measures — U-3, U-6, the involuntary hours gap, and occupational mismatch, for every U.S. state, pooled across January through May 2026.
 
 ## Key Findings (Pooled Jan–May 2026, Not Seasonally Adjusted)
 
@@ -10,7 +10,9 @@ An interactive state-level underemployment dashboard built from Bureau of Labor 
 | U-6 (broad underutilization) | 7.44% |
 | Overqualification rate | 15.01% |
 
-The ~3-percentage-point spread between U-3 and U-6 reveals the population that the headline figure leaves unnamed: workers employed fewer hours than they need, and those who have quietly stopped searching for doors they have learned will not open. One in six employed workers carries credentials that exceed what their current role demands — a structural signal of misallocated human capital that no single unemployment rate conveys.
+The ~3-percentage-point spread between U-3 and U-6 reveals the population that the headline figure leaves unnamed: workers employed fewer hours than they need, and those who have **quietly stopped searching for doors they have learned will not open.** 
+
+*One in six employed workers carries credentials that exceed what their current role demands, a clear structural signal of misallocated human capital that no single unemployment rate conveys.*
 
 ## Validation Against BLS Published NSA Data
 
@@ -23,7 +25,11 @@ These CPS microdata estimates were cross-validated against the Bureau of Labor S
 
 **U-3** is fully validated. The pooled estimate equals the arithmetic mean of BLS's five monthly NSA values (4.70, 4.70, 4.30, 4.00, 4.10), confirming that the CPS weighting (`PWCMPWGT / 10,000`) and labor force classification logic are correctly implemented.
 
-**U-6** shows a persistent 0.66pp undercount relative to BLS. This gap is a known, disclosed methodology boundary: the marginal-attachment filter used here (`PEDWWNTO=1`, `PEDWAVL=1`, `PEDWLKWK ∈ {1,2}`) captures a narrower population than BLS's full U-6 numerator, which incorporates additional classification logic in the published estimates. The measure ladder from the BLS data (Jan-May NSA avg) shows: U-6 = U-3 (4.36%) + discouraged workers (+0.26pp) + other marginally attached (+0.70pp) + involuntary part-time (+2.78pp) = 8.10%. The 0.66pp gap falls primarily in the marginally-attached component. This does not affect U-3 or the overqualification rate.
+**U-6** shows a persistent 0.66pp undercount relative to BLS. 
+
+This gap is a known, disclosed methodology boundary: the marginal-attachment filter used here (`PEDWWNTO=1`, `PEDWAVL=1`, `PEDWLKWK ∈ {1,2}`) captures a narrower population than BLS's full U-6 numerator, which incorporates additional classification logic in the published estimates. 
+
+The measure ladder from the BLS data (Jan-May NSA avg) shows: U-6 = U-3 (4.36%) + discouraged workers (+0.26pp) + other marginally attached (+0.70pp) + involuntary part-time (+2.78pp) = 8.10%. The 0.66pp gap falls primarily in the marginally-attached component. This does not affect U-3 or the overqualification rate.
 
 ## Measures Defined
 
@@ -39,9 +45,12 @@ These CPS microdata estimates were cross-validated against the Bureau of Labor S
 2. Group workers by occupation. Exclude any occupation with fewer than 30 observations (small-cell suppression).
 3. Within each qualifying occupation, compute the population-weighted mean and standard deviation of educational attainment.
 4. Flag a worker as overqualified if their PEEDUCA exceeds (occupation mean + 1.0 × occupation SD).
-5. Apply CPS composite weights (PWCMPWGT ÷ 10,000). Overqualification rate = weighted overqualified count ÷ weighted employed-in-scope count.
+5. Apply CPS composite weights (PWCMPWGT ÷ 10,000). 
+6. **Overqualification rate = weighted overqualified count ÷ weighted employed-in-scope count.**
 
-This is a relative, data-driven heuristic — no external "required education" table or O\*NET crosswalk is needed, and no subjective threshold is imposed. The result reflects statistical deviation from occupation norms as observed in the data itself. Because PEEDUCA is an ordinal code rather than continuous years of schooling, the measure should be read as a rank-based signal, not a precise credential gap. The overqualification rate is not cross-validated against BLS published figures (BLS does not publish a comparable national estimate).
+This is a relative, data-driven heuristic, no external "required education" table or O\*NET crosswalk is needed, and no subjective threshold is imposed. 
+
+The result reflects statistical deviation from occupation norms as observed in the data itself. Because PEEDUCA is an ordinal code rather than continuous years of schooling, the measure should be read as a rank-based signal, not a precise credential gap. The overqualification rate is not cross-validated against BLS published figures (BLS does not publish a comparable national estimate).
 
 ## Data Source
 
@@ -49,7 +58,7 @@ Bureau of Labor Statistics, Current Population Survey (CPS) Basic Monthly Public
 Files: `jan26pub.csv`, `feb26pub.csv`, `mar26pub.csv`, `apr26pub.csv`, `may26pub.csv`
 Composite final weight: `PWCMPWGT` (4 implied decimals — divide by 10,000)
 
-Figures are **not seasonally adjusted** and are **pooled across four months**. Pooling stabilizes small state-level cells but blends seasonal factors — do not read trend or make seasonal claims from these figures.
+Figures are **not seasonally adjusted** and are **pooled across five months**. Pooling stabilizes small state-level cells but blends seasonal factors, do not read trend or make seasonal claims from these figures.
 
 ## Project Structure
 
@@ -111,7 +120,6 @@ Click any state on the map to drill into that state's measures. Use the state dr
 
 ## Caveats
 
-- Figures are not seasonally adjusted and are not directly comparable to BLS published seasonally adjusted estimates
 - Five-month pooling stabilizes state-level cells but masks within-period movement; this is a current-snapshot tool, not a trend explorer
 - The overqualification measure is a **statistical rank-based heuristic** — not an authoritative skills assessment
 - Small states may exhibit wide effective confidence intervals on any given measure

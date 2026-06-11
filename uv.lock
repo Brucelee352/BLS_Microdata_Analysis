@@ -178,6 +178,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "requests" },
     { name = "watchfiles" },
 ]
 
@@ -188,6 +189,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "pandas", specifier = ">=3.0.3" },
     { name = "plotly", specifier = ">=6.8.0" },
+    { name = "requests", specifier = ">=2.32.0" },
     { name = "watchfiles", specifier = ">=1.2.0" },
 ]
 
