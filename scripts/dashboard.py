@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """U.S. Underemployment Dashboard.
 
 A self-contained Plotly Dash app that visualizes state-level underemployment
@@ -66,11 +65,11 @@ FIPS_TO_NAME = {
 NATIONAL_FIPS = 0
 NATIONAL_LABEL = "National"
 
-# BLS published NSA averages, Jan-May 2026, Table A-15 (series LNU04000000 / LNU03327709).
+# BLS published NSA averages, Jan-May 2026, Table A-15
+# (LNU04000000 and LNU03327709, retrieved via BLS Public Data API v2).
 # U-3: monthly NSA simple avg = 4.36% — exact match with our CPS pooled estimate.
-# U-6: monthly NSA simple avg = 8.10% — our CPS estimate is 7.44% (-0.66pp gap,
-#      attributable to our PEDWWNTO/PEDWAVL/PEDWLKWK marginal-attachment filter
-#      capturing a narrower population than the BLS full U-6 numerator).
+# U-6: monthly NSA simple avg = 8.10% — our CPS estimate is 7.44% (-0.66pp gap;
+#      due to narrower PEDWWNTO/PEDWAVL/PEDWLKWK marginal-attachment filter).
 BLS_NSA_U3_AVG = 4.36
 BLS_NSA_U6_AVG = 8.10
 
@@ -175,7 +174,7 @@ def fmt_delta(value: float, national: float, lower_is_better: bool = True) -> tu
     (shown green); a higher value is unfavorable (red).
     """
     delta = value - national
-    arrow = "+" if delta > 0 else ("-" if delta < 0 else "~")
+    arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "▬")
     favorable = (delta < 0) if lower_is_better else (delta > 0)
     if delta == 0:
         color = "#6c757d"
@@ -268,6 +267,7 @@ def build_bar(row: pd.Series) -> go.Figure:
                     for m, v in zip(measures, state_vals)
                 ],
                 textposition="outside",
+                text_auto="True"
             )
         )
     fig.add_trace(
@@ -281,31 +281,36 @@ def build_bar(row: pd.Series) -> go.Figure:
         )
     )
 
-    # BLS NSA reference markers (horizontal tick) for U-3 and U-6.
-    # U-3 BLS avg matches our estimate exactly; U-6 BLS avg (8.10%) exceeds ours
-    # (7.44%) by 0.66pp — the marker makes the gap visible without commentary.
-    fig.add_trace(
-        go.Scatter(
-            x=["U-3", "U-6"],
-            y=[BLS_NSA_U3_AVG, BLS_NSA_U6_AVG],
-            mode="markers",
-            marker=dict(
-                symbol="line-ew-open",
-                size=30,
-                color="#fd8d3c",
-                line=dict(color="#fd8d3c", width=2.5),
-            ),
-            name="BLS NSA Avg (Jan-May)",
-            hovertemplate="BLS Pub. NSA Avg<br>%{x}: %{y:.2f}%<extra></extra>",
+    # BLS published NSA reference lines and labels drawn inside each bar group.
+    # add_shape uses integer category positions (U-3=0, U-6=1) with xref="x";
+    # ±0.38 spans the full grouped-bar width for that category.
+    _cats = ["U-3", "U-6", "Avg Hrs Gap", "Overqual. Rate"]
+    for cat, ref_val in [("U-3", BLS_NSA_U3_AVG), ("U-6", BLS_NSA_U6_AVG)]:
+        idx = _cats.index(cat)
+        fig.add_shape(
+            type="line",
+            x0=idx - 0.38, x1=idx + 0.38,
+            y0=ref_val, y1=ref_val,
+            line=dict(color="#fd8d3c", width=2, dash="dot"),
+            xref="x", yref="y",
         )
-    )
+        fig.add_annotation(
+            x=idx, y=ref_val,
+            xref="x", yref="y",
+            text=f"BLS NSA: {ref_val:.2f}%",
+            showarrow=False,
+            font=dict(size=9, color="#e6550d"),
+            bgcolor="rgba(255,255,255,0.82)",
+            borderpad=2,
+            yshift=10,
+        )
 
     fig.update_layout(
         barmode="group",
         title=dict(text=f"Measures: {state_label} vs National", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=60, b=75),
-        height=380,
-        legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5),
+        margin=dict(l=10, r=10, t=80, b=10),
+        height=340,
+        legend=dict(orientation="h", yanchor="bottom", y=1.14, xanchor="center", x=0.5),
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         yaxis=dict(title="value (% or hrs)", gridcolor="#e9ecef"),
@@ -349,7 +354,7 @@ def build_gauge(row: pd.Series) -> go.Figure:
             title=dict(
                 text=(
                     f"U-6: {state_label}"
-                    f"<br><sub>dark line = CPS national {nat_u6:.2f}%"
+                    f"<br><sub>line = CPS national {nat_u6:.2f}%"
                     f" | BLS NSA avg {BLS_NSA_U6_AVG:.2f}%</sub>"
                 ),
                 font=dict(size=14),
@@ -358,7 +363,7 @@ def build_gauge(row: pd.Series) -> go.Figure:
     )
     fig.update_layout(
         margin=dict(l=20, r=30, t=90, b=50),
-        height=380,
+        height=340,
         paper_bgcolor="rgba(240,246,255,0.4)",
         annotations=[dict(
             x=0.5, y=-0.18,
@@ -415,62 +420,12 @@ def build_scatter(selected_fips: int) -> go.Figure:
     fig.update_layout(
         title=dict(text="States: U-3 vs Overqualification Rate", x=0.5, font=dict(size=14)),
         margin=dict(l=10, r=10, t=70, b=10),
-        height=460,
+        height=340,
         showlegend=False,
         paper_bgcolor="rgba(240,246,255,0.4)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(title="U-3 (%)", gridcolor="#e9ecef"),
         yaxis=dict(title="Overqualification Rate (%)", gridcolor="#e9ecef"),
-    )
-    return fig
-
-
-def build_rankings(selected_fips: int, metric_key: str) -> go.Figure:
-    """Horizontal bar chart of all states ranked by the selected map metric.
-
-    The selected state is highlighted in orange; the national average is drawn
-    as a vertical dashed reference line. States are sorted ascending so the
-    lowest value sits at the top.
-    """
-    col, axis_label, _ = MAP_METRICS[metric_key]
-    sel = int(selected_fips)
-
-    states = STATES.copy().sort_values(col, ascending=True)
-    nat_val = float(NATIONAL[col])
-
-    colors = [
-        "#e6550d" if int(f) == sel else "#2c7fb8"
-        for f in states["state_fips"]
-    ]
-
-    fig = go.Figure(
-        go.Bar(
-            x=states[col],
-            y=states["state_name"],
-            orientation="h",
-            marker_color=colors,
-            customdata=states["state_name"],
-            hovertemplate="<b>%{customdata}</b><br>" + axis_label + ": %{x:.2f}%<extra></extra>",
-        )
-    )
-
-    fig.add_vline(
-        x=nat_val,
-        line_dash="dash",
-        line_color="#0d1b2a",
-        annotation_text=f"National {nat_val:.2f}%",
-        annotation_position="top",
-    )
-
-    fig.update_layout(
-        title=dict(text=f"State Rankings: {axis_label}", x=0.5, font=dict(size=14)),
-        margin=dict(l=10, r=10, t=70, b=10),
-        height=520,
-        showlegend=False,
-        paper_bgcolor="rgba(240,246,255,0.4)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title=axis_label, gridcolor="#e9ecef"),
-        yaxis=dict(title="", tickfont=dict(size=9)),
     )
     return fig
 
@@ -482,11 +437,11 @@ def build_kpi_cards(row: pd.Series) -> list:
     def card(title: str, value_text: str, delta_text: str, delta_color: str) -> dbc.Col:
         body = [
             html.Div(title, className="text-muted small text-uppercase"),
-            html.H3(value_text, className="my-2 fw-bold", style={"fontSize": "1.6rem"}),
-            html.Div(delta_text, style={"color": delta_color, "fontSize": "0.9rem", "marginTop": "4px"}),
+            html.H3(value_text, className="my-1 fw-bold"),
+            html.Div(delta_text, style={"color": delta_color, "fontSize": "0.85rem"}),
         ]
         return dbc.Col(
-            dbc.Card(dbc.CardBody(body, className="py-3 px-3"), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
+            dbc.Card(dbc.CardBody(body), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
             xs=12, sm=6, md=3,
         )
 
@@ -525,27 +480,25 @@ server = app.server  # for WSGI deployment
 title_block = dbc.Card(
     dbc.CardBody(
         [
-            html.H2("U.S. Underemployment Dashboard", className="fw-bold mb-3"),
+            html.H2("U.S. Underemployment Dashboard", className="fw-bold"),
             html.P(
-                "CPS Basic Monthly Microdata | Jan-May 2026 "
-                "| Not Seasonally Adjusted",
+                f"CPS Basic Monthly Microdata — Jan-Apr 2026 "
+                f"— Not Seasonally Adjusted",
                 className="text-muted mb-2",
-                style={"fontSize": "0.95rem"},
             ),
             html.P(
                 "Select a state on the map or dropdown to explore measures.",
-                className="small text-secondary mb-2",
+                className="small text-secondary",
             ),
             html.Hr(),
-            html.Label("Select a State", className="mt-3 fw-semibold small"),
+            html.Label("Select state", className="fw-semibold small"),
             dcc.Dropdown(
                 id="state-dropdown",
                 options=DROPDOWN_OPTIONS,
                 value=NATIONAL_FIPS,
                 clearable=False,
             ),
-        ],
-        className="p-4",
+        ]
     ),
     className="shadow-sm h-100",
     style={"background": "linear-gradient(135deg, #ffffff 0%, #fff0f0 100%)"},
@@ -590,17 +543,11 @@ app.layout = dbc.Container(
         dbc.Row(id="kpi-cards", className="g-3 mb-3"),
         dbc.Row(
             [
-                dbc.Col(dcc.Graph(id="bar-chart", config={"displayModeBar": False}), md=6),
-                dbc.Col(dcc.Graph(id="gauge-chart", config={"displayModeBar": False}), md=6),
+                dbc.Col(dcc.Graph(id="bar-chart", config={"displayModeBar": False}), md=4),
+                dbc.Col(dcc.Graph(id="gauge-chart", config={"displayModeBar": False}), md=4),
+                dbc.Col(dcc.Graph(id="scatter-chart", config={"displayModeBar": False}), md=4),
             ],
-            className="g-3 mb-3",
-        ),
-        dbc.Row(
-            [
-                dbc.Col(dcc.Graph(id="scatter-chart", config={"displayModeBar": False}), md=6),
-                dbc.Col(dcc.Graph(id="rankings-chart", config={"displayModeBar": False}), md=6),
-            ],
-            className="g-3 mb-3",
+            className="g-3",
         ),
         dbc.Row(
             dbc.Col(
@@ -608,32 +555,30 @@ app.layout = dbc.Container(
                     html.P(
                         "Point-in-time estimates, not seasonally adjusted. "
                         "Small state figures may have high sampling error.",
-                        className="small text-muted mb-1",
+                        className="small text-muted fst-italic mt-2 mb-1",
                     ),
                     html.P(
                         f"Source: BLS CPS Basic Monthly Microdata, {MONTH_RANGE}. "
                         "Overqualification rate suppressed when employed sample < 100,000. "
                         "Overqualification uses the realized-matches method: workers whose "
-                        "educational attainment (PEEDUCA) exceeds their occupation's mean "
-                        "by more than 1 SD are flagged; occupations with fewer than 30 "
-                        "observations excluded.",
+                        "education (PEEDUCA) exceeds their occupation mean by >1 SD are flagged; "
+                        "occupations with <30 observations excluded.",
                         className="small text-muted mb-1",
                     ),
                     html.P(
                         f"BLS validation (Table A-15 NSA, Jan-May 2026): "
-                        f"U-3 CPS estimate 4.36% = BLS published NSA avg 4.36% (exact match). "
-                        f"U-6 CPS estimate 7.44% vs BLS NSA avg 8.10% (-0.66pp; "
-                        f"orange markers on bar chart show BLS reference levels). "
-                        f"Gap reflects narrower marginal-attachment filter in CPS microdata.",
-                        className="small text-muted mb-1",
+                        f"U-3 CPS 4.36% = BLS NSA avg 4.36% (exact match). "
+                        f"U-6 CPS 7.44% vs BLS NSA avg 8.10% (-0.66pp; orange dotted lines "
+                        f"on bar chart mark BLS reference levels).",
+                        className="small text-muted mb-0",
                     ),
                 ]
             ),
-            className="mt-3 pt-3 border-top",
+            className="mt-2 pt-2 border-top",
         ),
     ],
     fluid=True,
-    className="py-4 px-2",
+    className="py-3",
     style={"background": "linear-gradient(135deg, #f0f4ff 0%, #fff5f5 100%)"},
 )
 
@@ -675,14 +620,12 @@ def update_map(metric_key, selected_fips):
     Output("bar-chart", "figure"),
     Output("gauge-chart", "figure"),
     Output("scatter-chart", "figure"),
-    Output("rankings-chart", "figure"),
     Input("state-dropdown", "value"),
-    Input("map-metric", "value"),
 )
-def update_panels(selected_fips, metric_key):
+def update_panels(selected_fips):
     row = get_row(selected_fips)
     cards = build_kpi_cards(row)
-    return cards, build_bar(row), build_gauge(row), build_scatter(selected_fips), build_rankings(selected_fips, metric_key)
+    return cards, build_bar(row), build_gauge(row), build_scatter(selected_fips)
 
 
 if __name__ == "__main__":
