@@ -163,6 +163,7 @@ cython_debug/
 .csv/
 /data
 .duckdb/
+.duckdb
 
 # Claude
 .claude/
