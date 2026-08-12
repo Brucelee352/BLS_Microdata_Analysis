@@ -513,9 +513,25 @@ title_block = dbc.Card(
     dbc.CardBody(
         [
             html.H2("U.S. Underemployment Report", className="fw-bold mb-3"),
-            html.P(
-                "Author: Bruce A. Lee",
-                className="small text-secondary mb-2",
+            html.Div(
+                [
+                    html.Span("Author: Bruce A. Lee", className="small text-secondary"),
+                    dbc.Button(
+                        "Home",
+                        href="https://brucea-lee.com",
+                        external_link=True,
+                        target="_self",
+                        color="primary",
+                        outline=True,
+                        className="ms-2",
+                        style={
+                            "fontSize": "0.75rem",
+                            "lineHeight": "1.5",
+                            "padding": "0 0.5rem",
+                        },
+                    ),
+                ],
+                className="d-flex align-items-center mb-2",
             ),
             html.P(
                 "Dataset: CPS Basic Monthly Microdata | Jan-May 2026",
