@@ -98,11 +98,8 @@ SERIES_MAP = {
     },
 }
 
-# My CPS-microdata estimates (NSA, Jan-May 2026 pooled) for validation
-MY_ESTIMATES = {
-    "U3": 4.36,
-    "U6": 7.44,
-}
+# My CPS-microdata estimates (NSA, pooled) come from the pipeline output.
+STATE_CSV = DATA_DIR / "state_measures.csv"
 
 FLAG_THRESHOLD = 0.3  # percentage points
 
@@ -262,18 +259,26 @@ def build_tidy(raw_series: list[dict]) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 def print_validation(tidy: pd.DataFrame) -> None:
     """Compare CPS microdata pooled estimates against BLS published NSA."""
+    if not STATE_CSV.exists():
+        LOG.warning("No %s yet; run bls_cps_pipeline.py to validate.", STATE_CSV)
+        return
+    nat = pd.read_csv(STATE_CSV).query("state_fips == 0").iloc[0]
+    start, end = (date.fromisoformat(f"{m}-01") for m in nat["month_range"].split(" to "))
+    my_estimates = {m: float(nat[m.lower()]) for m in ("U3", "U4", "U5", "U6")
+                    if m.lower() in nat}
+
     print("\n" + "=" * 72)
     print("VALIDATION: CPS Microdata Estimates vs BLS Published NSA")
-    print("Period covered by my estimates: Jan-May 2026 (pooled, NSA)")
+    print(f"Period covered by my estimates: {nat['month_range']} (pooled, NSA)")
     print("=" * 72)
     print(f"{'Month':<12} {'Measure':<8} {'My NSA':>8} {'BLS NSA':>9} {'Gap':>8}  {'Flag'}")
     print("-" * 72)
 
-    for measure, my_val in MY_ESTIMATES.items():
+    for measure, my_val in my_estimates.items():
         subset = tidy[
             (tidy["measure"] == measure) &
-            (tidy["month"] >= date(2026, 1, 1)) &
-            (tidy["month"] <= date(2026, 5, 31))
+            (tidy["month"] >= start) &
+            (tidy["month"] <= end)
         ].sort_values("month")
 
         if subset.empty:
@@ -294,7 +299,7 @@ def print_validation(tidy: pd.DataFrame) -> None:
 
     print("=" * 72)
     print(f"Flag threshold: +/-{FLAG_THRESHOLD} percentage points")
-    print("Note: my estimates are pooled Jan-May 2026 NSA; BLS values are monthly NSA.")
+    print("Note: my estimates are pooled NSA; BLS values are monthly NSA.")
     print("      Pool-vs-point differences are expected; gaps > 0.3pp warrant review.")
     print()
 

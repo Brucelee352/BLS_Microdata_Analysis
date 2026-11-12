@@ -49,6 +49,15 @@ def _find_project_root(start: Path) -> Path:
 PROJECT_ROOT   = _find_project_root(SCRIPT_DIR)
 CSV_PATH       = PROJECT_ROOT / "data" / "bls_a15.csv"
 OUTPUT_CSV     = PROJECT_ROOT / "data" / "bls_analysis.csv"
+STATE_CSV      = PROJECT_ROOT / "data" / "state_measures.csv"
+
+
+def load_my_estimates() -> tuple[dict, str, str]:
+    """National pooled estimates + month range from the pipeline's output."""
+    nat = pd.read_csv(STATE_CSV).query("state_fips == 0").iloc[0]
+    start, end = nat["month_range"].split(" to ")
+    return {m: float(nat[m.lower()]) for m in ("U3", "U4", "U5", "U6")
+            if m.lower() in nat}, start, end
 
 # ---------------------------------------------------------------------------
 # Series map (all verified; see bls_api_pull.py for provenance)
@@ -334,11 +343,13 @@ def cps_validation(df: pd.DataFrame) -> pd.DataFrame:
     Returns DataFrame with columns:
       section, measure, month, my_nsa, bls_nsa, gap_pp, flag, note
     """
-    my_estimates    = {"U3": 4.36, "U6": 7.44}
+    my_estimates, start, end = load_my_estimates()
     flag_threshold  = 0.3
+    in_range = df["month"].map(lambda d: start <= d.strftime("%Y-%m") <= end)
+    df = df[in_range]
 
     hdr("CPS MICRODATA VALIDATION vs BLS PUBLISHED NSA (re-confirmed from live pull)")
-    print("  My pooled estimates: Jan-May 2026 NSA from CPS microdata")
+    print(f"  My pooled estimates: {start} to {end} NSA from CPS microdata")
     print(f"  {'Month':<10}  {'Measure':<8}  {'My NSA':>8}  {'BLS NSA':>8}  {'Gap':>9}  Flag")
     hr()
 
@@ -384,9 +395,8 @@ def cps_validation(df: pd.DataFrame) -> pd.DataFrame:
         hr()
 
     print(f"  Flag threshold: +/-{flag_threshold}pp")
-    print("  U-3 pool=avg alignment indicates weighting and CPS methodology are sound.")
-    print("  U-6 persistent gap likely reflects marginally-attached scope difference")
-    print("  (PEDWWNTO/PEDWAVL/PEDWLKWK filter vs BLS's full NILF+wanting-work logic).")
+    print("  Pooled rates are labor-force-weighted, so they can differ slightly")
+    print("  from a simple average of monthly published rates.")
 
     return pd.DataFrame(rows)
 

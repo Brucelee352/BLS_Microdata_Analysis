@@ -1,0 +1,57 @@
+/* Spacing for the Technical overview modal (dcc.Markdown output). */
+
+.tech-overview {
+    line-height: 1.65;
+    font-size: 0.95rem;
+}
+
+.tech-overview h4 {
+    margin-top: 1.75rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #dde6f3;
+    color: #1e1b4b;
+}
+
+.tech-overview h4:first-child {
+    margin-top: 0.25rem;
+}
+
+.tech-overview p {
+    margin-bottom: 0.9rem;
+}
+
+.tech-overview ul,
+.tech-overview ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.tech-overview li {
+    margin-bottom: 0.4rem;
+}
+
+.tech-overview table {
+    margin: 0.5rem 0 1.25rem;
+    border-collapse: collapse;
+    min-width: 50%;
+}
+
+.tech-overview th,
+.tech-overview td {
+    padding: 0.45rem 1rem;
+    border: 1px solid #dde6f3;
+    text-align: left;
+}
+
+.tech-overview th {
+    background: #eef4fc;
+    font-weight: 600;
+}
+
+.tech-overview code {
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    background: #eef4fc;
+    color: #4338ca;
+}

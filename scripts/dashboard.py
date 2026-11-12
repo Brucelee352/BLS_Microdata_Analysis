@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-"""U.S. Underemployment Dashboard.
+"""U.S. Employment Tracker.
 
 A self-contained Plotly Dash app that visualizes state-level underemployment
-measures derived from BLS CPS Basic Monthly Microdata (Jan-May 2026).
+measures derived from BLS CPS Basic Monthly Microdata (pooled 2026 months).
 
 Data is loaded once at startup from the project's DuckDB database into a pandas
 DataFrame; all callbacks operate on that in-memory frame.
 
 Run (from the worktree root):
     uv run python scripts/dashboard.py
-Then open http://localhost:8050
+Then open http://localhost:8051
 """
 
 from __future__ import annotations
@@ -21,7 +21,8 @@ import dash_bootstrap_components as dbc
 import duckdb
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Input, Output, dcc, html
+from dash import Input, Output, State, dcc, html
+from plotly.colors import sample_colorscale
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -29,8 +30,21 @@ from dash import Input, Output, dcc, html
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Sequential color scale used across the choropleth (light = low, dark = high).
-COLOR_SCALE = "YlOrRd"
+# Palette: shades of light blue and indigo. Indigo marks emphasis (the
+# selected state, reference lines); light blues are everything else.
+COLOR_SCALE = "sunset"        # choropleth: reversed dense
+BAR_SCALE = "teal"              # state vs. national bar chart
+SCATTER_SCALE = "Sunsetdark"       # pale yellow (low U-3) -> deep purple (high U-3)
+RANK_SCALE = "Temps"         # state rankings
+GAUGE_GOOD, GAUGE_BAD, GAUGE_BAR = "#d4edda", "#f8d7da", "cadetblue"
+PALE_BLUE = "#eef4fc"          # page and card backgrounds
+PALE_INDIGO = "#eeedfb"
+LIGHT_BLUE = "#b9d4f1"         # secondary marks (national bars, other states)
+SKY_BLUE = "#6f9fdc"           # primary marks
+INDIGO = "#4338ca"             # selected state
+DEEP_INDIGO = "#1e1b4b"        # outlines and reference lines
+PANEL_BG = "rgba(238,244,252,0.6)"
+GRID = "#dde6f3"
 
 # employed_in_scope below this is treated as too small to report reliably.
 SUPPRESSION_THRESHOLD = 100_000
@@ -66,9 +80,10 @@ FIPS_TO_NAME = {
 NATIONAL_FIPS = 0
 NATIONAL_LABEL = "National"
 
-# BLS Table A-15 NSA averages (Jan-May 2026) used as reference benchmarks.
-BLS_NSA_U3_AVG = 4.36
-BLS_NSA_U6_AVG = 8.10
+# BLS Table A-15 NSA averages used as reference benchmarks. These are the
+# Jan-Oct 2026 averages: update them when the pipeline's month range changes.
+BLS_NSA_U3_AVG = 4.28
+BLS_NSA_U6_AVG = 7.96
 
 # Map metric -> (column, display label, hover label).
 MAP_METRICS = {
@@ -212,8 +227,8 @@ def build_choropleth(metric_key: str, selected_fips: int) -> go.Figure:
                     locationmode="USA-states",
                     colorscale=COLOR_SCALE,
                     showscale=False,
-                    marker_line_color="#0d1b2a",
-                    marker_line_width=2.5,
+                    marker_line_color=DEEP_INDIGO,
+                    marker_line_width=3,
                     hoverinfo="skip",
                 )
             )
@@ -222,7 +237,7 @@ def build_choropleth(metric_key: str, selected_fips: int) -> go.Figure:
         geo=dict(scope="usa", lakecolor="white", bgcolor="rgba(0,0,0,0)"),
         margin=dict(l=0, r=0, t=10, b=0),
         height=420,
-        paper_bgcolor="rgba(240,246,255,0.4)",
+        paper_bgcolor=PANEL_BG,
     )
     return fig
 
@@ -245,6 +260,9 @@ def build_bar(row: pd.Series) -> go.Figure:
     ]
     state_label = str(row["state_name"])
     is_national = int(row["state_fips"]) == NATIONAL_FIPS
+    # Two shades from the ice scale: deep blue for the state, pale ice for
+    # national, and near-black from the scale's dark end for reference lines.
+    state_color, nat_color, ref_color = sample_colorscale(BAR_SCALE, [0.35, 0.8, 0.0])
 
     fig = go.Figure()
     if not is_national:
@@ -253,7 +271,7 @@ def build_bar(row: pd.Series) -> go.Figure:
                 name=state_label,
                 x=measures,
                 y=state_vals,
-                marker_color="#2c7fb8",
+                marker_color=state_color,
                 text=[
                     "n/a" if (suppressed and m == "Overqual. Rate") else f"{v:.1f}"
                     for m, v in zip(measures, state_vals)
@@ -266,7 +284,7 @@ def build_bar(row: pd.Series) -> go.Figure:
             name=NATIONAL_LABEL,
             x=measures,
             y=nat_vals,
-            marker_color="#9ecae1" if not is_national else "#2c7fb8",
+            marker_color=nat_color if not is_national else state_color,
             text=[f"{v:.1f}" for v in nat_vals],
             textposition="inside",
         )
@@ -280,7 +298,7 @@ def build_bar(row: pd.Series) -> go.Figure:
             type="line",
             x0=idx - 0.38, x1=idx + 0.38,
             y0=ref_val, y1=ref_val,
-            line=dict(color="#fd8d3c", width=2, dash="dot"),
+            line=dict(color=ref_color, width=2, dash="dot"),
             xref="x", yref="y",
         )
         fig.add_annotation(
@@ -288,7 +306,7 @@ def build_bar(row: pd.Series) -> go.Figure:
             xref="x", yref="y",
             text=f"BLS NSA: {ref_val:.2f}%",
             showarrow=False,
-            font=dict(size=9, color="#e6550d"),
+            font=dict(size=9, color='#000000'),
             bgcolor="rgba(255,255,255,0.82)",
             borderpad=2,
             yshift=10,
@@ -300,9 +318,9 @@ def build_bar(row: pd.Series) -> go.Figure:
         margin=dict(l=10, r=10, t=60, b=60),
         height=380,
         legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5),
-        paper_bgcolor="rgba(240,246,255,0.4)",
+        paper_bgcolor=PANEL_BG,
         plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(title="value (% or hrs)", gridcolor="#e9ecef"),
+        yaxis=dict(title="value (% or hrs)", gridcolor=GRID),
     )
     return fig
 
@@ -328,13 +346,13 @@ def build_gauge(row: pd.Series) -> go.Figure:
             gauge=dict(
                 shape="bullet",
                 axis=dict(range=[0, axis_max], ticksuffix="%"),
-                bar=dict(color="#2c7fb8"),
+                bar=dict(color=GAUGE_BAR),
                 steps=[
-                    dict(range=[0, nat_u6], color="#d4edda"),
-                    dict(range=[nat_u6, axis_max], color="#f8d7da"),
+                    dict(range=[0, nat_u6], color=GAUGE_GOOD),
+                    dict(range=[nat_u6, axis_max], color=GAUGE_BAD),
                 ],
                 threshold=dict(
-                    line=dict(color="#0d1b2a", width=3),
+                    line=dict(color=DEEP_INDIGO, width=3),
                     thickness=0.85,
                     value=nat_u6,
                 ),
@@ -352,7 +370,7 @@ def build_gauge(row: pd.Series) -> go.Figure:
     fig.update_layout(
         margin=dict(l=20, r=30, t=90, b=50),
         height=380,
-        paper_bgcolor="rgba(240,246,255,0.4)",
+        paper_bgcolor=PANEL_BG,
         annotations=[dict(
             x=0.5, y=-0.18,
             xref="paper", yref="paper",
@@ -365,21 +383,28 @@ def build_gauge(row: pd.Series) -> go.Figure:
 
 
 def build_scatter(selected_fips: int) -> go.Figure:
-    """Scatter of all states: x=U-3, y=Overqualification Rate."""
+    """Bubble chart of all states: x=U-3, y=Overqualification Rate.
+
+    Bubble size grows with the overqualification rate; color deepens with U-3.
+    """
     states = STATES.copy()
-    sel = int(selected_fips)
+    oq = states["overqualification_rate"]
+    sizes = 10 + 30 * (oq - oq.min()) / (oq.max() - oq.min())
 
-    is_sel = states["state_fips"] == sel
-    others = states[~is_sel]
-
-    fig = go.Figure()
-    fig.add_trace(
+    fig = go.Figure(
         go.Scatter(
-            x=others["u3"],
-            y=others["overqualification_rate"],
+            x=states["u3"],
+            y=oq,
             mode="markers",
-            marker=dict(size=9, color="#9ecae1", line=dict(color="#4292c6", width=0.5)),
-            text=others["state_name"],
+            marker=dict(
+                size=sizes,
+                color=states["u3"],
+                colorscale=SCATTER_SCALE,
+                colorbar=dict(title="U-3 (%)", thickness=12),
+                opacity=0.85,
+                line=dict(color="white", width=0.8),
+            ),
+            text=states["state_name"],
             hovertemplate="<b>%{text}</b><br>U-3: %{x:.2f}%<br>Overqual: %{y:.2f}%<extra></extra>",
             name="States",
         )
@@ -388,31 +413,36 @@ def build_scatter(selected_fips: int) -> go.Figure:
     fig.add_vline(x=float(NATIONAL["u3"]), line_dash="dot", line_color="#adb5bd")
     fig.add_hline(y=float(NATIONAL["overqualification_rate"]), line_dash="dot", line_color="#adb5bd")
 
-    sel_rows = states[is_sel]
-    if not sel_rows.empty:
+    # Selected state: an open black ring around its bubble, plus a label.
+    is_sel = states["state_fips"] == int(selected_fips)
+    if is_sel.any():
         fig.add_trace(
             go.Scatter(
-                x=sel_rows["u3"],
-                y=sel_rows["overqualification_rate"],
+                x=states.loc[is_sel, "u3"],
+                y=oq[is_sel],
                 mode="markers+text",
-                marker=dict(size=16, color="#e6550d", line=dict(color="#0d1b2a", width=1.5)),
-                text=sel_rows["state_abbr"],
+                marker=dict(size=sizes[is_sel] + 8, color="rgba(0,0,0,0)",
+                            line=dict(color="black", width=2.5)),
+                text=states.loc[is_sel, "state_abbr"],
                 textposition="top center",
-                hovertemplate="<b>%{customdata}</b><br>U-3: %{x:.2f}%<br>Overqual: %{y:.2f}%<extra></extra>",
-                customdata=sel_rows["state_name"],
+                hoverinfo="skip",
                 name="Selected",
             )
         )
 
     fig.update_layout(
-        title=dict(text="States: U-3 vs Overqualification Rate", x=0.5, font=dict(size=14)),
+        title=dict(
+            text="States: U-3 vs Overqualification Rate"
+                 "<br><sub>bubble size = overqualification rate, color = U-3</sub>",
+            x=0.5, font=dict(size=14),
+        ),
         margin=dict(l=10, r=10, t=70, b=10),
         height=460,
         showlegend=False,
-        paper_bgcolor="rgba(240,246,255,0.4)",
+        paper_bgcolor=PANEL_BG,
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title="U-3 (%)", gridcolor="#e9ecef"),
-        yaxis=dict(title="Overqualification Rate (%)", gridcolor="#e9ecef"),
+        xaxis=dict(title="U-3 (%)", gridcolor=GRID),
+        yaxis=dict(title="Overqualification Rate (%)", gridcolor=GRID),
     )
     return fig
 
@@ -425,17 +455,19 @@ def build_rankings(selected_fips: int, metric_key: str) -> go.Figure:
     states = STATES.copy().sort_values(col, ascending=True)
     nat_val = float(NATIONAL[col])
 
-    colors = [
-        "#e6550d" if int(f) == sel else "#2c7fb8"
-        for f in states["state_fips"]
-    ]
+    # Bars colored by value on Viridis; the selected state gets a black outline.
+    is_sel = states["state_fips"].astype(int) == sel
 
     fig = go.Figure(
         go.Bar(
             x=states[col],
             y=states["state_name"],
             orientation="h",
-            marker_color=colors,
+            marker=dict(
+                color=states[col],
+                colorscale=RANK_SCALE,
+                line=dict(color="black", width=is_sel.map({True: 2.5, False: 0}).tolist()),
+            ),
             customdata=states["state_name"],
             hovertemplate="<b>%{customdata}</b><br>" + axis_label + ": %{x:.2f}%<extra></extra>",
         )
@@ -444,7 +476,7 @@ def build_rankings(selected_fips: int, metric_key: str) -> go.Figure:
     fig.add_vline(
         x=nat_val,
         line_dash="dash",
-        line_color="#0d1b2a",
+        line_color=DEEP_INDIGO,
         annotation_text=f"National {nat_val:.2f}%",
         annotation_position="top",
     )
@@ -454,9 +486,9 @@ def build_rankings(selected_fips: int, metric_key: str) -> go.Figure:
         margin=dict(l=10, r=10, t=70, b=10),
         height=520,
         showlegend=False,
-        paper_bgcolor="rgba(240,246,255,0.4)",
+        paper_bgcolor=PANEL_BG,
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(title=axis_label, gridcolor="#e9ecef"),
+        xaxis=dict(title=axis_label, gridcolor=GRID),
         yaxis=dict(title="", tickfont=dict(size=9)),
     )
     return fig
@@ -473,7 +505,7 @@ def build_kpi_cards(row: pd.Series) -> list:
             html.Div(delta_text, style={"color": delta_color, "fontSize": "0.9rem", "marginTop": "4px"}),
         ]
         return dbc.Col(
-            dbc.Card(dbc.CardBody(body, className="py-3 px-3"), className="shadow-sm h-100", style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"}),
+            dbc.Card(dbc.CardBody(body, className="py-3 px-3"), className="shadow-sm h-100", style={"background": f"linear-gradient(135deg, {PALE_BLUE} 0%, #ffffff 100%)"}),
             xs=12, sm=6, md=3,
         )
 
@@ -499,23 +531,131 @@ def build_kpi_cards(row: pd.Series) -> list:
 
 
 # ---------------------------------------------------------------------------
+# About (shown in the modal)
+# ---------------------------------------------------------------------------
+
+TECH_OVERVIEW_MD = f"""
+#### About:
+
+State and national underemployment measures from the Current Population Survey (CPS),
+a monthly survey of about 60,000 households, pooled over {MONTH_RANGE}. Not seasonally
+adjusted.
+
+
+#### Sources:
+
+- CPS Basic Monthly public-use files (Census Bureau): 10 monthly CSVs, 1,214,584 person
+  records, 35 of 393 variables kept.
+- BLS Table A-15 (U-1 to U-6) from the BLS Public Data API v2, used for validation.
+
+
+#### Pipeline:
+
+Python 3.12 (uv), pandas, DuckDB, Plotly Dash, deployed with Docker and gunicorn.
+
+- `bls_cps_pipeline.py`: load, clean and aggregate; write to DuckDB and CSV.
+- `cps_underemp.py`: all measure math.
+- `bls_api_pull.py`, `bls_crosscheck.py`: pull BLS figures and compare.
+- `dashboard.py`: reads the 52-row `state_measures` table.
+
+
+#### Process:
+
+1. Load each monthly CSV and stack them.
+2. Label codes and rename columns; save person records to `cps_microdata`.
+3. Turn each person into weighted counts, then sum by state and nationally.
+4. Compute rates and write `state_measures` to DuckDB and CSV.
+
+
+#### Weights:
+
+>`PWCMPWGT` / 10,000 (four implied decimals), divided again by the number of months, so
+>counts are average monthly levels. Rates are unaffected.
+
+#### Unemployment Measures:
+
+- Employed: `PEMLR` 1 to 2. Unemployed: `PEMLR` 3 to 4.
+- Discouraged (D): `PRDISC` = 1. Marginally attached (MA): `PRDISC` = 1 or 2.
+- Part time for economic reasons (PT): `PRWKSTAT` = 3 or 6.
+
+| Measure | Formula |
+|---|---|
+| U-3 | U / LF |
+| U-4 | (U + D) / (LF + D) |
+| U-5 | (U + MA) / (LF + MA) |
+| U-6 | (U + MA + PT) / (LF + MA) |
+
+
+#### Involuntary Hours Gap:
+
+> 35 minus actual hours worked (`PEHRACTT`) for each PT worker, weighted and averaged.
+
+
+#### Overqualification:
+
+1. Employed workers; education (`PEEDUCA`) converted to years of schooling
+   (high school 12, associate 14, bachelor's 16, master's 18, doctorate 20). The raw
+   codes are ranks, not years: one step can be one grade or two years of graduate
+   school, so averaging them would distort the result.
+2. Weighted mean and SD of schooling per occupation (`PTIO1OCD`), national pool,
+   occupations with 30 or more sampled workers. National norms hold every state to
+   the same benchmark.
+3. Overqualified: schooling above the occupation mean + 1 SD.
+
+No BLS equivalent, so not externally validated.
+
+
+#### Validation:
+
+| Measure: | Dashboard: | BLS Published Avg: |
+|---|---|---|
+| U-3 | {NATIONAL['u3']:.2f}% | {BLS_NSA_U3_AVG:.2f}% |
+| U-6 | {NATIONAL['u6']:.2f}% | {BLS_NSA_U6_AVG:.2f}% |
+
+U-4 and U-5 are within 0.01 points for January to October 2026.
+
+
+#### Limits:
+
+- Pooled snapshot: no trends or seasonal reading.
+- Small states have wide sampling error.
+- Overqualification hidden where weighted employment in scope is under 100,000.
+"""
+
+
+# ---------------------------------------------------------------------------
 # App layout
 # ---------------------------------------------------------------------------
 
 app = dash.Dash(
     __name__,
+    assets_folder=str(SCRIPT_DIR / "assets"),
     external_stylesheets=[dbc.themes.FLATLY],
-    title="U.S. Underemployment Dashboard",
+    title="U.S. Employment Tracker",
 )
 server = app.server
 
 title_block = dbc.Card(
     dbc.CardBody(
         [
-            html.H2("U.S. Underemployment Report", className="fw-bold mb-3"),
+            html.H2("U.S. Employment Tracker", className="fw-bold mb-3"),
             html.Div(
                 [
-                    html.Span("Author: Bruce A. Lee", className="small text-secondary"),
+                    html.Span("Author: Bruce A. Lee", className="small text", style={"color": '#000000'}),
+                    dbc.Button(
+                        "About",
+                        id="overview-open",
+                        n_clicks=0,
+                        outline=True,
+                        className="ms-2",
+                        style={
+                            "fontSize": "0.75rem",
+                            "lineHeight": "1.5",
+                            "padding": "0 0.5rem",
+                            "color": INDIGO,
+                            "borderColor": INDIGO,
+                        },
+                    ),
                     dbc.Button(
                         "Home",
                         href="https://brucea-lee.com",
@@ -528,13 +668,15 @@ title_block = dbc.Card(
                             "fontSize": "0.75rem",
                             "lineHeight": "1.5",
                             "padding": "0 0.5rem",
+                            "color": INDIGO,
+                            "borderColor": INDIGO,
                         },
                     ),
                 ],
                 className="d-flex align-items-center mb-2",
             ),
             html.P(
-                "Dataset: CPS Basic Monthly Microdata | Jan-May 2026",
+                f"Dataset: CPS Basic Monthly Microdata | {MONTH_RANGE}",
                 className="text-muted mb-2",
                 style={"fontSize": "0.90rem"},
             ),
@@ -554,7 +696,7 @@ title_block = dbc.Card(
         className="p-4",
     ),
     className="shadow-sm h-100",
-    style={"background": "linear-gradient(135deg, #ffffff 0%, #fff0f0 100%)"},
+    style={"background": f"linear-gradient(135deg, #ffffff 0%, {PALE_INDIGO} 100%)"},
 )
 
 map_block = dbc.Card(
@@ -581,11 +723,27 @@ map_block = dbc.Card(
         ]
     ),
     className="shadow-sm h-100",
-    style={"background": "linear-gradient(135deg, #f0f6ff 0%, #ffffff 100%)"},
+    style={"background": f"linear-gradient(135deg, {PALE_BLUE} 0%, #ffffff 100%)"},
+)
+
+overview_modal = dbc.Modal(
+    [
+        dbc.ModalHeader(dbc.ModalTitle("Overview: Data, Pipeline and Methods")),
+        dbc.ModalBody(dcc.Markdown(TECH_OVERVIEW_MD, className="tech-overview px-3")),
+        dbc.ModalFooter(
+            dbc.Button("Close", id="overview-close", n_clicks=0,
+                       style={"backgroundColor": INDIGO, "borderColor": INDIGO})
+        ),
+    ],
+    id="overview-modal",
+    size="xl",
+    scrollable=True,
+    is_open=False,
 )
 
 app.layout = dbc.Container(
     [
+        overview_modal,
         dbc.Row(
             [
                 dbc.Col(title_block, md=4, className="mb-3"),
@@ -620,16 +778,17 @@ app.layout = dbc.Container(
                         className="small text-muted mb-1",
                     ),
                     html.P(
-                         "Overqualification uses the realized-matches method: workers whose "
-                        "education (PEEDUCA) exceeds their occupation mean by >1 SD are flagged;"
-                        "occupations with <30 observations excluded.",
+                        "Overqualification uses the realized-matches method: workers whose "
+                        "years of schooling exceed their occupation's national weighted mean "
+                        "by more than 1 SD are flagged; occupations with <30 observations "
+                        "are excluded.",
                         className="small text-muted mb-1",
                     ),
                     html.P(
-                        "BLS validation (Table A-15 NSA, Jan-May 2026): "
-                        "U-3 CPS 4.36% = BLS NSA avg 4.36% (exact match). "
-                        "U-6 CPS 7.44% vs BLS NSA avg 8.10% (-0.66pp; "
-                        "orange dotted lines on bar chart mark BLS reference levels).",
+                        f"BLS validation (Table A-15 NSA, CPS {MONTH_RANGE}): "
+                        f"U-3 CPS {NATIONAL['u3']:.2f}% vs BLS NSA avg {BLS_NSA_U3_AVG:.2f}%; "
+                        f"U-6 CPS {NATIONAL['u6']:.2f}% vs BLS NSA avg {BLS_NSA_U6_AVG:.2f}% "
+                        "(dark dotted lines on the bar chart mark BLS reference levels).",
                         className="small text-muted mb-0",
                     ),
                 ]
@@ -639,7 +798,7 @@ app.layout = dbc.Container(
     ],
     fluid=True,
     className="py-4 px-2",
-    style={"background": "linear-gradient(135deg, #f0f4ff 0%, #fff5f5 100%)"},
+    style={"background": f"linear-gradient(135deg, {PALE_BLUE} 0%, {PALE_INDIGO} 100%)"},
 )
 
 
@@ -696,5 +855,16 @@ def update_panels(selected_fips, metric_key):
     )
 
 
+@app.callback(
+    Output("overview-modal", "is_open"),
+    Input("overview-open", "n_clicks"),
+    Input("overview-close", "n_clicks"),
+    State("overview-modal", "is_open"),
+    prevent_initial_call=True,
+)
+def toggle_overview(_open_clicks: int, _close_clicks: int, is_open: bool) -> bool:
+    return not is_open
+
+
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8050, debug=True)
+    app.run(host="127.0.0.1", port=8051, debug=True)

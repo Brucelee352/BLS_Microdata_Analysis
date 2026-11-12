@@ -1,204 +1,165 @@
 """
 Underemployment measures from CPS Basic Monthly public-use microdata (BLS).
 
-Computes four measures in one pass:
-  1. U-3   -- official unemployment rate
-  2. U-6   -- broadest BLS alternative measure
-  3. Hours gap -- involuntary part-time intensity (actual vs. usual hours)
-  4. Occupational mismatch -- overqualification (education vs. occupation norm)
+Computes, in one vectorized pass:
+  1. U-3..U-6 -- official unemployment rate and BLS alternative measures
+  2. Hours gap -- hours short of full time (35) among involuntary part-timers
+  3. Occupational mismatch -- overqualification (education vs. occupation norm)
 
-Input: a CPS basic monthly public-use file (CSV, uppercase BLS names). For the
-fixed-width version, swap read_csv for pd.read_fwf() using the dictionary specs.
+Design: `person_contributions` turns each record into weighted counts
+(weight x indicator), so any group's levels are a plain column sum and
+`summarize` turns summed levels into rates. That makes national and
+per-state figures one `groupby().sum()` with no per-group re-computation.
 
-These are point-in-time, NOT seasonally adjusted, figures for a single file.
-Expect small differences from published SA tables for that reason.
-
-VERIFY every variable name/code against the CPS data dictionary for your file's
-year before trusting output -- the PEDW* and PEHRRSN* modules drift over time.
+Input: CPS basic monthly public-use CSV(s) with uppercase BLS names.
+Figures are NOT seasonally adjusted. Validated against BLS Table A-15 NSA
+(May 2026: U-3 4.07 vs 4.1, U-4 4.32 vs 4.3, U-5 4.98 vs 5.0, U-6 7.67 vs 7.7).
 """
 
+import numpy as np
 import pandas as pd
+
+WEIGHT_COL = "PWCMPWGT"  # composited final weight, 4 implied decimals
+FT_HOURS = 35            # BLS full-time threshold
+MIN_OCC_CELL = 30        # min unweighted employed records per occupation
+SD_THRESHOLD = 1.0
+
+# PEEDUCA is an ordinal code (31-46), not a scale: code steps are 1 grade at
+# the low end but 2+ years at the top. Approximate years of schooling make the
+# mean/SD meaningful (Jaeger 1997-style mapping).
+EDU_YEARS = {
+    31: 0, 32: 2.5, 33: 5.5, 34: 7.5, 35: 9, 36: 10, 37: 11, 38: 12,
+    39: 12, 40: 13, 41: 14, 42: 14, 43: 16, 44: 18, 45: 20, 46: 20,
+}
+
+INPUT_COLS = [WEIGHT_COL, "PEMLR", "PRDISC", "PRWKSTAT", "PEHRACTT",
+              "PEEDUCA", "PTIO1OCD"]
 
 
 # ---------------------------------------------------------------------------
 # Loading / pooling
 # ---------------------------------------------------------------------------
-def load_cps(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
+def load_cps(path, usecols=INPUT_COLS) -> pd.DataFrame:
+    keep = {c.upper() for c in usecols} if usecols else None
+    df = pd.read_csv(path, usecols=(lambda c: str(c).upper() in keep) if keep else None)
     df.columns = df.columns.str.upper()
     return df
 
 
 def load_pooled(paths) -> pd.DataFrame:
-    """Stack several monthly files (e.g. Jan-Apr) into one frame.
+    """Stack monthly files, tagging each with its source as MONTH.
 
-    Pooling stabilizes small subgroup cells, but blends months with different
-    seasonal factors -- do NOT read trend or make seasonal claims from a pooled
-    figure. Weights are summed across files, so divide rates, never use the
-    pooled weighted COUNTS as if they were a single month's population.
+    Pooling stabilizes small cells but blends seasonal factors -- do NOT read
+    trend from a pooled figure. Pass n_months to `person_contributions` so
+    levels are average monthly levels rather than sums across months.
     """
-    frames = []
-    for p in paths:
-        d = load_cps(p)
-        d["SRC_FILE"] = p
-        frames.append(d)
-    return pd.concat(frames, ignore_index=True)
+    return pd.concat([load_cps(p).assign(MONTH=str(p)) for p in paths],
+                     ignore_index=True)
 
 
 # ---------------------------------------------------------------------------
-# 1 & 2.  U-3 and U-6
+# Person-level weighted contributions
 # ---------------------------------------------------------------------------
-def alt_measures(df: pd.DataFrame, weight_col: str = "PWCMPWGT") -> dict:
-    w = df[weight_col] / 10000.0  # 4 implied decimals
+def overqualified(df: pd.DataFrame, employed: pd.Series, w: pd.Series,
+                  sd_threshold: float = SD_THRESHOLD,
+                  min_cell: int = MIN_OCC_CELL) -> tuple[pd.Series, pd.Series]:
+    """Realized-matches overeducation.
 
+    Flags employed workers whose years of schooling exceed their occupation's
+    weighted mean by more than `sd_threshold` weighted SDs. Occupation norms
+    come from whatever frame is passed in -- pass the national pool so every
+    state is judged against the same norm. Returns (in_scope, overqualified).
+    """
+    edu = df["PEEDUCA"].map(EDU_YEARS)
+    occ = df["PTIO1OCD"].where(employed & edu.notna() & (df["PTIO1OCD"] > 0))
+
+    g = pd.DataFrame({"w": w, "wx": w * edu, "wxx": w * edu ** 2}).groupby(occ)
+    s, n = g.sum(), g.size()
+    mean = s["wx"] / s["w"]
+    sd = np.sqrt((s["wxx"] / s["w"] - mean ** 2).clip(lower=0))  # Var = E[x²] - E[x]²
+
+    cutoff = (mean + sd_threshold * sd).where((n >= min_cell) & (sd > 0))
+    occ_cutoff = occ.map(cutoff)
+    in_scope = occ_cutoff.notna()
+    return in_scope, in_scope & (edu > occ_cutoff)
+
+
+def person_contributions(df: pd.DataFrame, n_months: int = 1,
+                         weight_col: str = WEIGHT_COL) -> pd.DataFrame:
+    """Weighted per-person counts; sum any column over a group for its level.
+
+    Dividing weights by n_months turns pooled sums into average monthly
+    levels (each month's weights already sum to the full population).
+    """
+    w = df[weight_col].clip(lower=0) / 10_000 / n_months
     mlr = df["PEMLR"]
-    employed    = mlr.isin([1, 2])
-    unemployed  = mlr.isin([3, 4])
-    nilf        = mlr.isin([5, 6, 7])
-    labor_force = employed | unemployed
+    employed = mlr.isin([1, 2])
 
-    # Part time for economic reasons (worked 1-34 hrs for econ reasons)
+    # PRDISC is BLS's own recode (universe: NILF who want a job, PRJOBSEA 1-4):
+    # 1 = discouraged, 2 = conditionally interested (other marginally attached).
+    discouraged = df["PRDISC"].eq(1)
+    marg_attached = df["PRDISC"].isin([1, 2])
+
+    # Part time for economic reasons: at work 1-34 actual hrs, either usually
+    # FT (3) or usually PT (6). Gap uses actual hours, which define PTER.
     pter = df["PRWKSTAT"].isin([3, 6])
+    hrs_gap = (FT_HOURS - df["PEHRACTT"]).clip(lower=0).where(pter, 0)
 
-    # Marginally attached (includes discouraged): NILF + want job + available
-    # + looked in last 12 months (not last 4 weeks).  >>> VERIFY codes <<<
-    marg_attached = (
-        nilf
-        & df["PEDWWNTO"].eq(1)        # wants a job
-        & df["PEDWAVL"].eq(1)         # available to work
-        & df["PEDWLKWK"].isin([1, 2]) # looked within last 12 months
+    in_scope, overq = overqualified(df, employed, w)
+
+    return pd.DataFrame({
+        "employed": employed,
+        "unemployed": mlr.isin([3, 4]),
+        "discouraged": discouraged,
+        "marginally_attached": marg_attached,
+        "affected_workers": pter,
+        "total_hrs_gap": hrs_gap,
+        "employed_in_scope": in_scope,
+        "overqualified_workers": overq,
+    }).mul(w, axis=0)
+
+
+# ---------------------------------------------------------------------------
+# Levels -> rates
+# ---------------------------------------------------------------------------
+def summarize(levels: pd.DataFrame) -> pd.DataFrame:
+    """Add rates to a frame of summed levels (one row per group)."""
+    U, MA, D, PT = (levels[c] for c in
+                    ["unemployed", "marginally_attached", "discouraged",
+                     "affected_workers"])
+    LF = levels["employed"] + U
+    return levels.assign(
+        labor_force=LF,
+        u3=100 * U / LF,
+        u4=100 * (U + D) / (LF + D),
+        u5=100 * (U + MA) / (LF + MA),
+        u6=100 * (U + MA + PT) / (LF + MA),
+        avg_hrs_gap=levels["total_hrs_gap"] / PT,
+        overqualification_rate=100 * levels["overqualified_workers"]
+        / levels["employed_in_scope"],
     )
 
-    s = lambda mask: float(w[mask].sum())
-    U, LF = s(unemployed), s(labor_force)
-    MA, PT = s(marg_attached), s(pter)
 
-    u3 = U / LF * 100
-    u6 = (U + MA + PT) / (LF + MA) * 100
-    return {
-        "employed": s(employed), "unemployed": U, "labor_force": LF,
-        "marginally_attached": MA, "pt_for_econ_reasons": PT,
-        "U3": round(u3, 2), "U6": round(u6, 2),
-    }
+def all_measures(df: pd.DataFrame, n_months: int = 1) -> pd.Series:
+    """All measures for the whole frame."""
+    return summarize(person_contributions(df, n_months).sum().to_frame().T).iloc[0]
 
 
-# ---------------------------------------------------------------------------
-# 3.  Hours gap -- intensity of involuntary part-time
-# ---------------------------------------------------------------------------
-def hours_gap(df: pd.DataFrame, weight_col: str = "PWCMPWGT") -> dict:
-    """Weighted hours shortfall among PT-for-economic-reasons workers.
+def all_measures_by(df: pd.DataFrame, group_cols, n_months: int = 1) -> pd.DataFrame:
+    """All measures by subgroup (e.g. ['PESEX'] or ['GESTFIPS']).
 
-    Gap = usual full-time threshold (35) minus usual hours, for those who want
-    more work. Reported as total weekly FTE-equivalent hours lost and as an
-    average per affected worker. Uses PEHRUSLT (usual); PEHRACTT (actual) is
-    available too if you prefer an actual-vs-usual definition.
+    Occupation norms are computed on the full frame, not within each group.
     """
-    w = df[weight_col] / 10000.0
-    usual = pd.to_numeric(df["PEHRUSLT"], errors="coerce")
-
-    # Involuntary PT: PT for economic reasons and wants to work more.
-    affected = df["PRWKSTAT"].isin([3, 6]) & df["PEHRWANT"].eq(1) & usual.between(1, 34)
-
-    gap_per_person = (35 - usual).clip(lower=0)
-    total_gap = float((w[affected] * gap_per_person[affected]).sum())
-    n_affected = float(w[affected].sum())
-    avg_gap = total_gap / n_affected if n_affected else 0.0
-
-    return {
-        "affected_workers": n_affected,
-        "total_weekly_hours_gap": round(total_gap, 0),
-        "avg_hours_gap_per_worker": round(avg_gap, 1),
-    }
-
-
-# ---------------------------------------------------------------------------
-# 4.  Occupational mismatch -- overqualification (realized-matches method)
-# ---------------------------------------------------------------------------
-def occupational_mismatch(df: pd.DataFrame, weight_col: str = "PWCMPWGT",
-                          sd_threshold: float = 1.0) -> dict:
-    """Realized-matches overeducation: flag employed workers whose education
-    exceeds the occupation's mean by more than `sd_threshold` standard
-    deviations of education within that occupation.
-
-    This is a relative, data-driven definition -- no external 'required
-    education' table needed. The job-analysis alternative (mapping occupations
-    to BLS education-and-training categories or O*NET Job Zones) is more
-    defensible but requires an external crosswalk you'd supply separately.
-
-    PEEDUCA is an ordinal code, not years of schooling, so treat the result as
-    a rank-based heuristic. Occupation cells with few observations are noisy;
-    we skip cells below `min_cell`.
-    """
-    w = df[weight_col] / 10000.0
-    employed = df["PEMLR"].isin([1, 2])
-    occ = df["PTIO1OCD"]
-    edu = pd.to_numeric(df["PEEDUCA"], errors="coerce")
-
-    emp = df[employed].copy()
-    emp["_W"] = w[employed]
-    emp["_EDU"] = edu[employed]
-    emp["_OCC"] = occ[employed]
-
-    min_cell = 30
-    stats = emp.groupby("_OCC")["_EDU"].agg(["mean", "std", "count"])
-    stats = stats[stats["count"] >= min_cell]
-
-    emp = emp.join(stats, on="_OCC", rsuffix="_occ")
-    emp = emp.dropna(subset=["mean", "std"])
-    emp = emp[emp["std"] > 0]
-
-    overqualified = emp["_EDU"] > (emp["mean"] + sd_threshold * emp["std"])
-
-    n_over = float(emp.loc[overqualified, "_W"].sum())
-    n_total = float(emp["_W"].sum())
-    rate = n_over / n_total * 100 if n_total else 0.0
-
-    return {
-        "overqualified_workers": n_over,
-        "employed_in_scope": n_total,
-        "overqualification_rate": round(rate, 2),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Convenience: all four at once, optionally by subgroup
-# ---------------------------------------------------------------------------
-def all_measures(df: pd.DataFrame, weight_col: str = "PWCMPWGT") -> dict:
-    out = {}
-    out.update(alt_measures(df, weight_col))
-    out.update(hours_gap(df, weight_col))
-    out.update(occupational_mismatch(df, weight_col))
-    return out
-
-
-def all_measures_by(df: pd.DataFrame, group_cols, weight_col="PWCMPWGT") -> pd.DataFrame:
-    """All four measures broken out by grouping variable(s).
-
-    The payoff of microdata: e.g. group_cols=['PESEX'] or ['GESTFIPS'].
-    Small monthly cells get noisy fast -- pool months or widen the group.
-    """
-    rows = []
-    for key, sub in df.groupby(group_cols):
-        rec = all_measures(sub, weight_col)
-        rec["group"] = key
-        rows.append(rec)
-    return pd.DataFrame(rows).set_index("group")
+    return summarize(person_contributions(df, n_months).groupby(
+        [df[c] for c in np.atleast_1d(group_cols)]).sum())
 
 
 if __name__ == "__main__":
     import sys
-    # Pass one path, or several (Jan..Apr) to pool.
     paths = sys.argv[1:] or ["cps_basic.csv"]
-    df = load_pooled(paths) if len(paths) > 1 else load_cps(paths[0])
-
-    res = all_measures(df)
-    print(f"U-3:  {res['U3']}%")
-    print(f"U-6:  {res['U6']}%")
-    print(f"Hours gap: {res['avg_hours_gap_per_worker']} hrs/wk "
-          f"across {res['affected_workers']:,.0f} workers")
-    print(f"Overqualification rate: {res['overqualification_rate']}%")
-    print()
-    print(res)
-
-    # Validation: not-seasonally-adjusted U-3 should closely match the published
-    # NSA U-3 for the month. If it does, weights and core coding are sound.
+    res = all_measures(load_pooled(paths), n_months=len(paths))
+    for k in ["u3", "u4", "u5", "u6"]:
+        print(f"{k.upper()}: {res[k]:.2f}%")
+    print(f"Hours gap: {res['avg_hrs_gap']:.1f} hrs/wk across "
+          f"{res['affected_workers']:,.0f} workers")
+    print(f"Overqualification rate: {res['overqualification_rate']:.2f}%")
