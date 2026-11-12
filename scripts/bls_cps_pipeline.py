@@ -68,7 +68,8 @@ def _find_data_root(start: Path) -> Path:
 PROJECT_ROOT = _find_data_root(SCRIPT_DIR)
 DATA_DIR = PROJECT_ROOT / "data"
 DB_DIR = PROJECT_ROOT / "duckdb"
-DB_PATH = DB_DIR / "bls_cps.duckdb"
+DB_PATH = DB_DIR / "bls_cps.duckdb"                  # state_measures only; deployed
+MICRODATA_DB_PATH = DB_DIR / "bls_cps_microdata.duckdb"  # cps_microdata; local only
 LOG_DIR = PROJECT_ROOT / "logs"
 STATE_CSV_PATH = DATA_DIR / "state_measures.csv"
 
@@ -390,14 +391,23 @@ def make_table(df: pd.DataFrame, table: str,
 
 
 def load_duckdb(records: pd.DataFrame, measures: pd.DataFrame) -> None:
-    """Load the person-level records and aggregated measures into DuckDB."""
+    """Write the aggregated measures and the person-level records to separate
+    DuckDB files.
+
+    The dashboard (and the Docker image) only needs state_measures, so it gets
+    its own small file. The 1.2M-row cps_microdata table goes to a local-only
+    file for ad hoc analysis. DB_PATH is recreated from scratch because DuckDB
+    does not shrink a file when tables are dropped.
+    """
     DB_DIR.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(DB_PATH))
-    try:
-        make_table(records, "cps_microdata", con)
-        make_table(measures, "state_measures", con)
-    finally:
-        con.close()
+    DB_PATH.unlink(missing_ok=True)
+    for path, table, df in [(DB_PATH, "state_measures", measures),
+                            (MICRODATA_DB_PATH, "cps_microdata", records)]:
+        con = duckdb.connect(str(path))
+        try:
+            make_table(df, table, con)
+        finally:
+            con.close()
 
 
 # ---------------------------------------------------------------------------

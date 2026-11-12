@@ -1,0 +1,11 @@
+# The image only needs pyproject.toml, uv.lock, scripts/ and duckdb/bls_cps.duckdb.
+.git
+.venv
+.env
+.claude
+data
+logs
+duckdb/bls_cps_microdata.duckdb
+duckdb/*.wal
+**/__pycache__
+*.pyc

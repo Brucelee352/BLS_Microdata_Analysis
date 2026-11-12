@@ -81,7 +81,8 @@ The data are the BLS / Census CPS Basic Monthly public-use files, `jan26pub.csv`
 │   ├── bls_analysis.csv      # cross-check output (from bls_crosscheck.py)
 │   └── state_measures.csv    # pipeline output (51 states + national row)
 ├── duckdb/
-│   └── bls_cps.duckdb        # pipeline output; shipped in the Docker image
+│   ├── bls_cps.duckdb        # state_measures only; shipped in the Docker image
+│   └── bls_cps_microdata.duckdb  # person-level records; local only, not committed
 ├── scripts/
 │   ├── bls_cps_pipeline.py   # ETL: load -> clean -> measure -> DuckDB
 │   ├── cps_underemp.py       # measure math (U-3..U-6, hours gap, overqualification)
@@ -131,7 +132,7 @@ Download each month's public-use file from the Census Bureau's CPS Basic Monthly
 
 - Column names in the 2026 CPS files differ from older documentation. The pipeline uses `PTIO1OCD` (not `PEIO1OCD`) and `PEHRRSN1` (not `PEHRRSN`).
 - `_find_data_root()` walks up parent directories to find a populated `data/` folder, so the pipeline runs from either the main checkout or a git worktree.
-- DuckDB stores the person-level records (`cps_microdata`, about 1.2 million rows) and the aggregated state measures (`state_measures`, 52 rows). The dashboard reads only `state_measures`.
+- The pipeline writes two DuckDB files. `duckdb/bls_cps.duckdb` holds only `state_measures` (52 rows, about 0.5 MB); it is committed and is the only table the dashboard reads. `duckdb/bls_cps_microdata.duckdb` holds `cps_microdata` (about 1.2 million person records) for local analysis and is git-ignored.
 
 ## Caveats
 

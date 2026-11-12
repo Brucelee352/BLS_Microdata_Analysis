@@ -167,3 +167,7 @@ cython_debug/
 
 # Claude
 .claude/
+
+# Local-only person-level DuckDB (dashboard uses duckdb/bls_cps.duckdb)
+duckdb/bls_cps_microdata.duckdb
+duckdb/*.wal
